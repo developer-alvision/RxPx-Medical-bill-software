@@ -5,7 +5,7 @@
   "engines": { "node": ">=22.18.0 <23" },
   "scripts": {
     "build": "node scripts/build-static.cjs",
-    "build:production": "node scripts/build-static.cjs --require-config",
+    "build:production": "node scripts/build-static.cjs",
     "check:deployment": "node scripts/build-static.cjs --check --require-config",
     "test": "node --test tests/extraction.test.cjs tests/export.test.cjs tests/deployment.test.cjs",
     "test:database": "node --test tests/database.test.cjs",
