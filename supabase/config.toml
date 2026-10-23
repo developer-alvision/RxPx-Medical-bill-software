@@ -1,0 +1,6 @@
+project_id = "rxpx-hospital-bills"
+
+[functions.extract-bill]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/extract-bill/index.ts"

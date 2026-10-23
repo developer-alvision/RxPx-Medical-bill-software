@@ -1,0 +1,21 @@
+{
+  "name": "rxpx-hospital-bills",
+  "version": "1.0.0",
+  "private": true,
+  "engines": { "node": ">=22.18.0 <23" },
+  "scripts": {
+    "build": "node scripts/build-static.cjs",
+    "build:production": "node scripts/build-static.cjs --require-config",
+    "check:deployment": "node scripts/build-static.cjs --check --require-config",
+    "test": "node --test tests/extraction.test.cjs tests/export.test.cjs tests/deployment.test.cjs",
+    "test:database": "node --test tests/database.test.cjs",
+    "test:browser": "node tests/app.test.cjs",
+    "test:ocr": "node tests/ocr-browser.test.cjs",
+    "test:ai": "node --experimental-vm-modules supabase/functions/extract-bill/tests/handler.test.mjs"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.10",
+    "playwright": "1.63.0",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+  }
+}
