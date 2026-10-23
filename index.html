@@ -1,0 +1,1506 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#111111">
+<title>RxPx Hospitals - Bills</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Poppins:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{color-scheme:light;box-sizing:border-box;
+--background:0 0% 100%;--card:0 0% 100%;--border:0 0% 90%;--primary:0 0% 7%;--accent:26 91% 53%;--foreground:0 0% 9%;--muted:0 0% 40%;--success:154 55% 30%;--warning:42 92% 40%;--danger:2 68% 46%;
+--bg:hsl(var(--background));--cd:hsl(var(--card));--bd:hsl(var(--border));--pr:hsl(var(--primary));--ac:hsl(var(--accent));--fg:hsl(var(--foreground));--mu:hsl(var(--muted));--ok:hsl(var(--success));--wn:hsl(var(--warning));--er:hsl(var(--danger))}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box;margin:0}
+body{background:var(--bg);color:var(--fg);font:400 16px/1.5 'DM Sans',system-ui,sans-serif;-webkit-font-smoothing:antialiased;min-height:100vh}
+h1{font:600 30px/1.15 'Cormorant Garamond',Georgia,serif;letter-spacing:-.01em}
+button{font:inherit;color:inherit;cursor:pointer;border:0;background:none;text-align:inherit}
+i[data-lucide],svg.lucide{width:20px;height:20px;stroke-width:1.75;flex:none}
+:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+.mu{color:var(--mu)}.sm{font-size:14px}.num{font-variant-numeric:tabular-nums}
+.card{background:var(--cd);border:1px solid var(--bd);border-radius:16px;box-shadow:0 1px 3px hsl(172 30% 12%/.05);padding:16px}
+.main{max-width:640px;margin:0 auto;padding:24px 20px 120px}
+.flow{max-width:560px;margin:0 auto;padding:16px 20px 128px}
+.in{animation:in .22s ease-out}@keyframes in{from{opacity:0;transform:translateY(6px)}}
+.stack>*+*{margin-top:16px}.sp{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.btn{min-height:52px;padding:0 20px;border-radius:14px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid var(--bd);background:var(--cd);width:100%;transition:opacity .2s ease-out}
+.btn.pri{background:var(--pr);color:#fff;border-color:var(--pr)}.btn:disabled{opacity:.4;cursor:not-allowed}
+.lnk{color:var(--pr);font-weight:600;text-decoration:underline;min-height:48px;display:inline-flex;align-items:center}
+.inp{width:100%;min-height:48px;padding:0 14px;font:inherit;font-size:16px;border:1px solid var(--bd);border-radius:12px;background:var(--cd);color:var(--fg)}
+.inp.low{border-color:var(--ac);box-shadow:0 0 0 2px hsl(var(--accent)/.25)}
+.fl{display:block;font-size:14px;font-weight:500}.fl .inp{margin-top:4px;font-weight:400}
+.hint{font-size:13px;color:var(--ac)}
+.seg{display:grid;grid-template-columns:1fr 1fr;background:hsl(var(--border)/.5);border-radius:14px;padding:4px}
+.seg button{min-height:44px;border-radius:10px;font-weight:600;color:var(--mu);text-align:center}.seg .on{background:var(--cd);color:var(--pr);box-shadow:0 1px 2px hsl(172 30% 12%/.08)}
+.chips{display:flex;gap:8px;overflow-x:auto;padding:2px 0 8px;scrollbar-width:none}.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;min-height:44px;padding:0 16px;border-radius:999px;border:1px solid var(--bd);background:var(--cd);font-weight:500}.chip.on{background:var(--pr);color:#fff;border-color:var(--pr)}
+.b{display:inline-block;font-size:13px;font-weight:600;padding:2px 10px;border-radius:999px;white-space:nowrap}
+.b.good{color:var(--ok);background:hsl(var(--success)/.12)}.b.soon,.b.low{color:var(--wn);background:hsl(var(--warning)/.14)}.b.exp{color:var(--er);background:hsl(var(--danger)/.12)}
+.row{display:flex;gap:12px;align-items:center;justify-content:space-between;width:100%;min-height:64px;padding:12px 16px;background:var(--cd);border:1px solid var(--bd);border-radius:16px;margin-top:8px}
+.row>div:first-child{min-width:0;flex:1}.row b,.row span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.row .r{text-align:right}
+.live{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--ac);margin-right:6px}
+.av{width:48px;height:48px;border-radius:50%;background:var(--pr);color:#fff;font-weight:600;display:grid;place-items:center}
+.stat{padding:16px}.stat .v{font-size:26px;font-weight:600;font-variant-numeric:tabular-nums;margin-top:4px}
+.chart-grid{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(240px,1fr);gap:14px}.chart-card{min-width:0;padding:18px 18px 14px;border-radius:12px}.chart-title{font-weight:600}.chart-subtitle{font-size:13px;color:var(--mu);margin-top:2px}.chart-plot{height:220px;margin-top:16px;position:relative}.chart-plot.donut{height:190px;margin-top:12px}.chart-legend{display:grid;gap:8px;margin-top:12px}.chart-key{display:flex;align-items:center;gap:8px;font-size:13px}.chart-dot{width:9px;height:9px;border-radius:50%;flex:none}.chart-key span:last-child{margin-left:auto;font-weight:600;font-variant-numeric:tabular-nums}.chart-empty{height:100%;display:grid;place-items:center;text-align:center;color:var(--mu);font-size:14px;padding:16px}
+.tile{display:flex;align-items:center;gap:16px;min-height:80px;cursor:pointer;width:100%}
+.tile .ib,.opt .ib{width:48px;height:48px;border-radius:14px;background:hsl(var(--primary)/.08);color:var(--pr);display:grid;place-items:center;flex:none}
+.opt{display:flex;gap:16px;align-items:center;width:100%;min-height:76px;margin-top:12px;transition:border-color .2s ease-out,background .2s ease-out}.opt:disabled{opacity:.45;cursor:not-allowed}
+.opt.on{border-color:var(--pr);background:hsl(var(--primary)/.05);box-shadow:0 0 0 1px var(--pr)}.opt.on .ib{background:var(--pr);color:#fff}
+.drop{display:block;border:1.5px dashed var(--bd);border-radius:16px;padding:48px 20px;text-align:center;cursor:pointer;background:var(--cd)}.drop.over{border-color:var(--pr)}
+.drop i{margin:0 auto 8px;display:block}
+.bar{position:fixed;left:0;right:0;bottom:0;background:var(--bg);border-top:1px solid var(--bd);padding:12px 20px calc(12px + env(safe-area-inset-bottom,0px));z-index:6}.bar>div{max-width:560px;margin:0 auto}
+.steps{display:flex;gap:4px;margin:8px 0 16px}.steps i{flex:1;height:3px;border-radius:2px;background:var(--bd)}.steps i.on{background:var(--pr)}
+.prev{width:100%;max-height:300px;object-fit:contain;border-radius:12px;background:hsl(var(--border)/.4)}
+.warn{display:flex;gap:12px;padding:12px 16px;border-radius:14px;background:hsl(var(--warning)/.12);color:var(--fg);align-items:flex-start}.warn i{color:var(--wn);margin-top:2px}
+.note{font-size:14px;color:var(--mu);margin-top:12px}.err{font-size:14px;color:var(--er);margin-top:12px}
+.ps{display:flex;gap:16px;align-items:center;min-height:56px}.ps .d{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;border:1.5px solid var(--bd);flex:none}.ps.done .d{background:var(--ok);border-color:var(--ok);color:#fff}.ps.act .d{border-color:var(--pr);border-top-color:transparent;animation:sp 1s linear infinite}.ps.bad .d{background:var(--er);border-color:var(--er);color:#fff}.ps .d i{width:16px;height:16px}
+@keyframes sp{to{transform:rotate(360deg)}}
+.dl{display:grid;grid-template-columns:auto 1fr;gap:4px 16px;font-size:15px}.dl dt{color:var(--mu)}.dl dd{margin:0;text-align:right}
+.brand{display:flex;gap:12px;align-items:center;font-weight:600}.mark{width:44px;height:44px;border-radius:12px;background:var(--pr);color:#fff;display:grid;place-items:center}
+table{width:100%;border-collapse:collapse;font-size:15px}th,td{text-align:left;padding:12px 8px;border-bottom:1px solid var(--bd);white-space:nowrap}th{color:var(--mu);font-weight:500}
+.side{display:none}
+.tabs{position:fixed;left:0;right:0;bottom:0;display:grid;grid-template-columns:repeat(5,1fr);background:var(--cd);border-top:1px solid var(--bd);padding:6px 4px calc(6px + env(safe-area-inset-bottom,0px));z-index:5}
+.tab{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:52px;font-size:12px;font-weight:500;color:var(--mu);text-align:center}.tab.on{color:var(--pr)}
+.tab.add{color:var(--pr)}.tab .pl{width:52px;height:52px;margin-top:-26px;border-radius:50%;background:var(--pr);color:#fff;display:grid;place-items:center;box-shadow:0 4px 12px hsl(172 62% 14%/.25);border:3px solid var(--bg)}
+.sheet{position:fixed;inset:0;background:hsl(172 30% 10%/.35);z-index:9;display:flex;align-items:flex-end;justify-content:center}.sheet>div{background:var(--bg);width:100%;max-width:560px;border-radius:24px 24px 0 0;padding:20px 20px calc(20px + env(safe-area-inset-bottom,0px));max-height:90vh;overflow:auto;animation:in .22s ease-out}
+#toast{position:fixed;left:50%;top:calc(16px + env(safe-area-inset-top,0px));transform:translate(-50%,-12px);background:var(--pr);color:#fff;padding:12px 20px;border-radius:14px;display:flex;gap:8px;align-items:center;opacity:0;pointer-events:none;transition:all .22s ease-out;z-index:20;font-weight:500}#toast.show{opacity:1;transform:translate(-50%,0)}
+@media(min-width:768px){.side{display:flex;flex-direction:column;gap:4px;position:fixed;left:0;top:0;bottom:0;width:232px;padding:24px 16px;background:var(--cd);border-right:1px solid var(--bd)}.side .brand{margin-bottom:24px}.sn{display:flex;gap:12px;align-items:center;min-height:48px;padding:0 12px;border-radius:12px;font-weight:500;color:var(--mu)}.sn.on{background:hsl(var(--primary)/.07);color:var(--pr)}.tabs{display:none}.wrap{margin-left:232px}.main{padding-bottom:48px;max-width:760px}.side .btn{margin-top:16px}}
+@media(max-width:640px){.chart-grid{grid-template-columns:1fr}.chart-plot{height:210px}.chart-plot.donut{height:170px}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+/* RxPx theme: black + orange on white */
+:root{--act:hsl(24 90% 38%)}
+h1{font:700 28px/1.15 Poppins,'DM Sans',system-ui,sans-serif;letter-spacing:-.02em}
+.hint{color:var(--act)}
+.logo{display:inline-flex;align-items:center;gap:10px;line-height:1}.logo .rx{font:800 30px/1 Poppins,sans-serif;letter-spacing:-.04em;color:var(--pr)}.logo .rx i{font-style:normal;font-size:.8em}.logo .hs{display:block;font:700 11px/1 Poppins,sans-serif;letter-spacing:.32em;margin-top:5px;color:var(--pr)}.logo svg{width:34px;height:26px;flex:none}.logo.big .rx{font-size:42px}.logo.big .hs{font-size:14px}.logo.big svg{width:46px;height:36px}
+.mtop{display:flex;justify-content:space-between;align-items:center;padding-bottom:12px;border-bottom:3px solid var(--ac)}
+.side .logo{margin-bottom:24px;padding-bottom:16px;border-bottom:3px solid var(--ac)}
+.sn.on{background:hsl(var(--accent)/.12);color:var(--pr);box-shadow:inset 3px 0 0 var(--ac)}
+.tab.on{color:var(--pr)}.tab.on svg{color:var(--ac)}
+.tab .pl{background:var(--ac);box-shadow:0 4px 12px hsl(var(--accent)/.4)}
+.btn.pri:hover:not(:disabled){background:var(--ac);border-color:var(--ac);color:#fff}
+.btn:hover:not(:disabled):not(.pri){border-color:var(--ac)}
+.chip.on{background:var(--pr);border-color:var(--pr)}.chip:hover{border-color:var(--ac)}
+.tile .ib,.opt .ib{background:hsl(var(--accent)/.14);color:var(--act)}
+.opt.on{border-color:var(--ac);background:hsl(var(--accent)/.06);box-shadow:0 0 0 1px var(--ac)}.opt.on .ib{background:var(--ac);color:#fff}
+.steps i.on{background:var(--ac)}
+.drop.over,.drop:hover{border-color:var(--ac);background:hsl(var(--accent)/.05)}
+.av{background:var(--pr);box-shadow:0 0 0 3px var(--ac)}
+.stat{position:relative;overflow:hidden}.stat::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--ac)}
+.card{box-shadow:0 1px 3px rgb(0 0 0/.06)}
+.ps.act .d{border-color:var(--ac);border-top-color:transparent}
+.lnk{color:var(--pr);text-decoration-color:var(--ac);text-decoration-thickness:2px;text-underline-offset:3px}
+#toast{max-width:calc(100vw - 32px)}
+.sheet{background:rgb(0 0 0/.45)}
+th{position:sticky;top:0;background:var(--cd)}
+tr:last-child td{border-bottom:0}
+@media(min-width:768px){.mob{display:none}}
+
+/* bill reading additions */
+.prevbox{overflow:hidden;text-align:center;border-radius:12px;background:hsl(var(--border)/.4)}
+.prevbox .prev{display:block;margin:0 auto;transition:transform .2s ease-out;background:none}
+.lastcard{border-left:4px solid var(--ac)}
+.okc{color:var(--ok);width:18px;height:18px;vertical-align:-3px;margin-right:4px}
+select.inp{appearance:none;-webkit-appearance:none;background:var(--cd) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 12px center;padding-right:36px}
+.eitem{padding:14px}.eitem .lnk{min-height:36px}
+.warn div{line-height:1.45}
+.opt .ib i,.opt .ib svg{width:22px;height:22px}
+.rtab td{white-space:normal;vertical-align:top}.rtab td span{display:block}.rtab tr[data-a]{cursor:pointer}.rtab th.r,.rtab td.r{text-align:right;white-space:nowrap}
+
+/* online saving: a small spinner while the Google Sheet answers; inputs never push the layout wider than the phone */
+.spin{width:18px;height:18px;border-radius:50%;border:2px solid currentColor;border-top-color:transparent;animation:sp 1s linear infinite;display:inline-block;vertical-align:-3px}
+.g2>*,.inp{min-width:0}
+</style></head>
+<body><div id="app"></div><div id="toast" role="status" aria-live="polite"></div>
+<script src="https://cdn.jsdelivr.net/npm/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script>
+/* ===== Bill reader (offline fallback): turns OCR / PDF / spreadsheet text into bill details ===== */
+const BillParser = (() => {
+  const MONTHS = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, sept: 9, oct: 10, nov: 11, dec: 12 };
+  const pad = n => String(n).padStart(2, '0');
+  const daysIn = (y, m) => new Date(y, m, 0).getDate();
+  const mk = (y, m, d) => { if (y < 100) y += 2000; return m >= 1 && m <= 12 && d >= 1 && d <= daysIn(y, m) ? `${y}-${pad(m)}-${pad(d)}` : '' };
+  const monthOf = s => { const t = String(s || '').toLowerCase().replace(/0/g, 'o'); return MONTHS[t.slice(0, 4)] || MONTHS[t.slice(0, 3)] || 0 };
+  const letters = s => (String(s).match(/[A-Za-z]/g) || []).length;
+  const digits = s => (String(s).match(/\d/g) || []).length;
+  const round2 = v => Math.round((v + Number.EPSILON) * 100) / 100;
+  const near = (a, b, tol = 0.02) => a > 0 && b > 0 && Math.abs(a - b) <= Math.max(0.6, tol * Math.max(a, b));
+
+  /* ---------- dates ---------- */
+  function findDates(text, today = new Date()) {
+    const out = [], t = String(text || '');
+    const push = (i, y, m, d) => { const v = mk(+y, +m, +d); if (v) out.push({ i, v }) };
+    let r;
+    const re1 = /\b(20\d{2})[-\/.](\d{1,2})[-\/.](\d{1,2})\b/g;
+    while ((r = re1.exec(t))) push(r.index, r[1], r[2], r[3]);
+    const re2 = /\b(\d{1,2})(?:st|nd|rd|th)?[\s\-\/.,']*([A-Za-z0][A-Za-z0]{2,8})\.?[\s\-\/.,']*(\d{4}|\d{2})\b/g;
+    while ((r = re2.exec(t))) { const m = letters(r[2]) >= 2 ? monthOf(r[2]) : 0; if (m) push(r.index, r[3], m, r[1]) }
+    const re3 = /\b([A-Za-z]{3,9})\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})\b/g;
+    while ((r = re3.exec(t))) { const m = monthOf(r[1]); if (m) push(r.index, r[3], m, r[2]) }
+    const re4 = /(?<![\d\/])(\d{1,2})\s?[\/\-.]\s?(\d{1,2})\s?[\/\-.]\s?(\d{4}|\d{2})(?![\d\/])/g;
+    while ((r = re4.exec(t))) {
+      let a = +r[1], b = +r[2];
+      if (a <= 12 && b > 12) [a, b] = [b, a]; // month/day order
+      push(r.index, r[3], b, a);
+    }
+    const max = new Date(today); max.setDate(max.getDate() + 3);
+    const lo = `${today.getFullYear() - 6}-01-01`, hi = `${max.getFullYear()}-${pad(max.getMonth() + 1)}-${pad(max.getDate())}`;
+    return out.filter(x => x.v >= lo && x.v <= hi).sort((a, b) => a.i - b.i);
+  }
+  // expiry / manufacturing dates: 06/27, 06/2027, JUN-27, 0627, 30/06/2027 ...
+  function parseMonthDate(text, end) {
+    let t = String(text || '').trim().toUpperCase().replace(/[|\[\]{}]/g, '');
+    if (!t) return '';
+    const fin = (y, m, d) => { y = +y; if (y < 100) y += 2000; m = +m; if (y < 2000 || y > 2049 || m < 1 || m > 12) return ''; return mk(y, m, d || (end ? daysIn(y, m) : 1)) };
+    let r = t.match(/(\d{1,2})\s?[\/\-.]\s?(\d{1,2})\s?[\/\-.]\s?(\d{4}|\d{2})/);
+    if (r) { const v = mk(+r[3], +r[2], +r[1]); if (v) return v }
+    r = t.match(/(20\d{2})[\/\-.](\d{1,2})[\/\-.](\d{1,2})/);
+    if (r) return mk(+r[1], +r[2], +r[3]);
+    r = t.match(/^(20\d{2})[\/\-.](\d{1,2})$/);
+    if (r) return fin(r[1], r[2]);
+    r = t.match(/([A-Z]{3,9})\.?[\s\-\/.']*(\d{4}|\d{2})\b/);
+    if (r && monthOf(r[1])) return fin(r[2], monthOf(r[1]));
+    r = t.match(/(?<!\d)(\d{1,2})\s?[\/\-.:']\s?(\d{4}|\d{2})(?!\d)/);
+    if (r) return fin(r[2], r[1]);
+    const d = t.replace(/[^0-9]/g, '');
+    if (/^\d{4}$/.test(t.replace(/\s/g, '')) && +d.slice(0, 2) >= 1 && +d.slice(0, 2) <= 12) return fin(d.slice(2), d.slice(0, 2));
+    if (/^\d{5}$/.test(d) && /[17]/.test(d[2]) && +d.slice(0, 2) <= 12) return fin(d.slice(3), d.slice(0, 2)); // "06727" = 06/27 read badly
+    if (/^\d{6}$/.test(d) && +d.slice(0, 2) <= 12 && d.slice(2, 4) === '20') return fin(d.slice(2), d.slice(0, 2)); // 062027
+    return '';
+  }
+
+  /* ---------- numbers ---------- */
+  function fixDigits(s) { // common OCR letter/digit mix-ups inside numbers
+    return s.replace(/[Oo]/g, '0').replace(/[Il|!]/g, '1').replace(/[Ss](?=\d|$)/g, '5').replace(/[Zz]/g, '2').replace(/B(?=\d)/g, '8');
+  }
+  function money(tok) {
+    let s = String(tok == null ? '' : tok).trim();
+    if (!s) return null;
+    if (typeof tok === 'number') return Number.isFinite(tok) ? { v: tok, dot: !Number.isInteger(tok) } : null;
+    const neg = /^\(.*\)$/.test(s) || /^[-−–]/.test(s);
+    s = s.replace(/^(?:rs|inr)\.?/i, '').replace(/[₹$\s]/g, '').replace(/\/-$/, '').replace(/^[(\-−–+]+|[)]+$/g, '').replace(/[,']/g, '');
+    if (!s || digits(s) === 0) return null;
+    if (letters(s) && digits(s) >= 2 && letters(s) <= 2) s = fixDigits(s);
+    s = s.replace(/[.:]+$/, '');
+    if (!/^\d*\.?\d+$/.test(s)) return null;
+    const v = Number(s);
+    return Number.isFinite(v) ? { v: neg ? -v : v, dot: s.includes('.') } : null;
+  }
+  const num = tok => { const m = money(tok); return m ? m.v : '' };
+  const isPct = t => /%$/.test(t) || /^@/.test(t);
+
+  /* ---------- tokens / lines ---------- */
+  const NOISE = /^[|\[\]{}=~_—–:;!,.'"`*^<>\\\/]+$/;
+  function cleanTok(t) {
+    t = String(t).replace(/^[|\[\]{}!]+|[|\[\]{}!]+$/g, '').trim();
+    return NOISE.test(t) ? '' : t;
+  }
+  function prepareDoc(doc) {
+    const lines = [];
+    for (const l of doc.lines || []) {
+      const toks = [];
+      for (const k of l.toks || []) {
+        const parts = String(k.t).split(/\s+/).filter(Boolean);
+        if (parts.length > 1 && doc.source !== 'sheet') { // split multi-word items, spread x evenly by length
+          const total = parts.join(' ').length, span = (k.x1 - k.x0) / Math.max(1, total);
+          let off = 0;
+          for (const p of parts) { const c = cleanTok(p); if (c) toks.push({ ...k, t: c, x0: k.x0 + off * span, x1: k.x0 + (off + p.length) * span }); off += p.length + 1 }
+        } else { const c = cleanTok(k.t); if (c) toks.push({ ...k, t: c }) }
+      }
+      if (!toks.length) continue;
+      toks.sort((a, b) => a.x0 - b.x0);
+      lines.push({ toks, text: toks.map(t => t.t).join(' '), y0: Math.min(...toks.map(t => t.y0)), y1: Math.max(...toks.map(t => t.y1)) });
+    }
+    return lines;
+  }
+
+  /* ---------- column dictionary ---------- */
+  const COLS = {
+    sno: 'sno slno sl si srno sr sn no serialno sno# # s1no 5no',
+    desc: 'productdescription product productname products description descriptionofgoods particulars particular itemname itemdescription item items medicine medicinename medicines drug drugname drugs nameofproduct nameoftheproduct nameofitem testname test tests testdescription investigation investigations service services servicename details charges itembatch itemsbatch name productbatch medicinebatch',
+    pack: 'pack packing pkg packsize uom size packof',
+    hsn: 'hsn hsncode hsnsac sac hsnsaccode hsnno',
+    mfr: 'mfr mfgco company mkt manufacturer mfrs comp mfrname mkdby',
+    batch: 'batch batchno bno batchnumber lot lotno btno batchn0',
+    exp: 'exp expiry expdt expdate expirydate expd usebefore exdt expiry dt',
+    mfg: 'mfg mfgdate mfd mfgdt manufacturedate manufacturingdate mfddate',
+    qty: 'qty qnty quantity qtydays daysqty days nos units pcs saleqty billedqty noofunits unitsqty qtynos qtys qy',
+    free: 'free fr sch scheme bonus freeqty schqty',
+    mrp: 'mrp mrpunit mrpstrip mrps',
+    rate: 'rate ptr price unitprice pts cost unitrate ratepu srate salerate rateunit unitcost priceunit rateperunit',
+    disc: 'disc disc% dis% dis discount cd% cd discount% dscnt discpct disc%',
+    gst: 'gst gst% gsts gst5 tax% gstrate cgst% sgst% igst% gstper taxrate gst%age vat%',
+    amount: 'amount amt value netamt netamount total totalamt netvalue taxable taxablevalue linetotal totalamount itemtotal amou amoun',
+    billno: 'billno invoiceno billnumber invoicenumber receiptno voucherno invno',
+    billdate: 'date billdate invoicedate receiptdate invdate',
+    party: 'patientname customername suppliername partyname vendorname supplier vendor party customer patient',
+  };
+  const DICT = {};
+  for (const [k, v] of Object.entries(COLS)) for (const w of v.split(' ')) DICT[w] = k;
+  const hkey = s => String(s).toLowerCase().replace(/[^a-z0-9%#]/g, '');
+  function lev(a, b) {
+    const m = a.length, n = b.length; if (Math.abs(m - n) > 2) return 9;
+    let prev = Array.from({ length: n + 1 }, (_, j) => j);
+    for (let i = 1; i <= m; i++) { const cur = [i]; for (let j = 1; j <= n; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); prev = cur }
+    return prev[n];
+  }
+  const DKEYS = Object.keys(DICT);
+  function lookup(s, fuzzy = true) {
+    let k = hkey(s);
+    if (!k) return '';
+    if (DICT[k]) return DICT[k];
+    const k2 = k.replace(/(rs|inr|rupees)$/, '');
+    if (k2 && DICT[k2]) return DICT[k2];
+    if (k === 'tax') return 'gst';
+    if (!fuzzy) return '';
+    if (k.length === 3) { for (const w of ['ptr', 'mrp', 'qty', 'exp', 'hsn', 'amt', 'pts', 'sch', 'mfr', 'mfg']) if (lev(k, w) === 1 && k[0] === w[0]) return DICT[w]; return '' }
+    if (k.length < 5) return '';
+    let best = '', bd = 9;
+    for (const d of DKEYS) { if (d.length < 5) continue; const v = lev(k, d); if (v < bd) { bd = v; best = d } }
+    return bd <= (k.length >= 8 ? 2 : 1) ? DICT[best] : '';
+  }
+  function headerOf(line, sheet) {
+    const toks = line.toks, cols = [];
+    const h = toks.reduce((a, t) => a + (t.y1 - t.y0), 0) / Math.max(1, toks.length) || 20;
+    for (let i = 0; i < toks.length;) {
+      let hit = null;
+      for (let n = Math.min(sheet ? 1 : 3, toks.length - i); n >= 1; n--) {
+        const g = toks.slice(i, i + n);
+        if (n > 1 && g.some((t, j) => j && t.x0 - g[j - 1].x1 > h * 2)) continue; // far apart = different columns
+        const kind = lookup(g.map(t => t.t).join(''), n === 1);
+        if (kind) { hit = { kind, n }; break }
+      }
+      if (hit) {
+        const g = toks.slice(i, i + hit.n);
+        cols.push({ kind: hit.kind, x0: Math.min(...g.map(t => t.x0)), x1: Math.max(...g.map(t => t.x1)), raw: g.map(t => t.t).join(' ') });
+        i += hit.n;
+      } else i++;
+    }
+    // neighbouring headers of the same kind ("Product" + "Name") are one column
+    const merged = [];
+    for (const c of cols) { const p = merged[merged.length - 1]; if (p && p.kind === c.kind && c.kind !== 'sno') { p.x1 = Math.max(p.x1, c.x1); p.raw += ' ' + c.raw } else merged.push({ ...c }) }
+    return merged;
+  }
+  function findHeader(lines, sheet) {
+    let best = null;
+    lines.forEach((l, i) => {
+      const cols = headerOf(l, sheet), kinds = new Set(cols.map(c => c.kind));
+      const numbers = l.toks.filter(t => money(t.t) && !/[a-z]/i.test(t.t)).length;
+      if (!kinds.has('desc') && kinds.size >= 4 && (kinds.has('qty') || kinds.has('amount')) && numbers <= 1 && !sheet) {
+        // the "Item / Product" heading was misread: use the wide unlabelled area before the first known column
+        const known = cols.filter(c => c.kind !== 'sno').sort((a, b) => a.x0 - b.x0), sno = cols.find(c => c.kind === 'sno');
+        const startX = sno ? sno.x1 : Math.min(...l.toks.map(t => t.x0)), firstX = known[0].x0;
+        const widths = known.map(c => c.x1 - c.x0), avgW = widths.reduce((a, b) => a + b, 0) / widths.length;
+        if (firstX - startX > avgW * 2) { cols.push({ kind: 'desc', x0: startX + 2, x1: firstX - avgW * 0.6, raw: '(name)' }); cols.sort((a, b) => a.x0 - b.x0); kinds.add('desc') }
+      }
+      const useful = ['desc', 'qty', 'amount', 'rate', 'mrp', 'batch', 'exp'].filter(k => kinds.has(k)).length;
+      if (!kinds.has('desc') || numbers > 1) return;
+      if (kinds.size >= 3 && useful >= 2 || kinds.size >= 2 && kinds.has('amount') && numbers === 0 && cols.length >= l.toks.length - 1) {
+        const score = kinds.size * 2 + useful - numbers;
+        if (!best || score > best.score) best = { i, cols, score };
+      }
+    });
+    return best;
+  }
+
+  /* ---------- summary lines (totals etc.) ---------- */
+  const SUMMARY_LABEL = /^(?:sub\s*-?\s*total|gross\s*(?:amount|amt|total|value)?|grand\s*total|net\s*(?:amount|amt|payable|total|value)|total(?:\s*(?:amount|amt|rs|value|payable|bill\s*amount))?|amount\s*payable|bill\s*amount|taxable\s*(?:amount|value)?|[csiu]\s*gst|gst|vat|tax(?:\s*amount)?|round\s*(?:off|ed)|r\s*\/\s*o|less|discount|disc\s*amt|cash\s*discount|amount\s*in\s*words|rupees|balance|paid|received|amount\s*due|total\s*due|savings|you\s*saved)\b/i;
+  const SUM_WORDS = /\b(?:rs|inr|only|amount|amt|payable|total|net|grand|due|value|bill|round|off|before|after|tax|gst|less|add|in|on|of|at|cash|upi|card|paid|by|the|to|be|incl|including|excl|r\/o|discount|disc|savings|saved|you|sub|gross|taxable)\b\.?/gi;
+  function isSummary(text) {
+    const t = text.replace(/^[^A-Za-z0-9]+/, '').trim();
+    if (/amount\s*in\s*words|^rupees\s+[a-z]/i.test(t)) return true;
+    const m = t.match(SUMMARY_LABEL);
+    if (!m) return false;
+    const rest = t.slice(m[0].length).replace(SUM_WORDS, ' ').replace(/[\d.,%:₹()\-+@*\/|]/g, ' ').trim();
+    return letters(rest) <= 3;
+  }
+  const SEP = /^[-=_.*~\s]{3,}$/;
+  const FOOTER = /\b(?:taxable\s*(?:value|amount|amt)|sub\s*-?\s*total|grand\s*total|net\s*payable|total\s*qty|total\s*quantity|total\s*items|no\.?\s*of\s*items|items\s*:|amount\s*in\s*words|round\s*off|total\s*gst|total\s*tax|e\s*&\s*o\.?\s*e)\b/i;
+
+  /* ---------- item helpers ---------- */
+  const FORM = /\b(?:tab|tabs|tablet|tablets|cap|caps|capsule|capsules|syp|syr|syrup|susp|suspension|inj|injection|drops?|cream|gel|oint|ointment|powder|pwd|sachet|soln|solution|lotion|tube|inhaler|respules?|vial|amp|ampoule|iv|infusion|ml|mg|mcg|gm|g|kit|spray|soap|strip|bottle|patch|tabs?\.)\b/i;
+  const SINGLE = /\b(?:syp|syr|syrup|susp|suspension|inj|injection|vial|amp|ampoule|bottle|tube|cream|gel|oint|ointment|drops?|lotion|spray|inhaler|iv|infusion|sachet|powder|soap|kit|\d+\s*ml|\d+(?:\.\d+)?\s*g|\d+\s*gm)\b/i;
+  function packSize(s) {
+    const t = String(s || '').toUpperCase();
+    let r = t.match(/(\d+)\s*[X*]\s*(\d+)/); if (r) return +r[2] > 1 ? +r[2] : +r[1];
+    r = t.match(/(\d+)\s*['`’]?\s*S\b/); if (r) return +r[1];
+    r = t.match(/\b(\d+)\s*(?:TAB|TABS|CAP|CAPS|NOS|PCS)\b/); if (r) return +r[1];
+    if (/\d\s*(ML|GM|G|KG|MG|L)\b/.test(t)) return 1;
+    return '';
+  }
+  const looksBatch = t => /^[A-Z0-9][A-Z0-9\-\/]{2,14}$/i.test(t) && digits(t) >= 2 && letters(t) >= 1 && !/^(?:tab|cap|inj|syp)/i.test(t) && !/^\d{1,2}[\/\-]\d{2,4}$/.test(t);
+
+  function cellText(cells, k) { return (cells[k] || []).map(t => t.t).join(' ').trim() }
+
+  function buildItem(cells, cols) {
+    let desc = cellText(cells, 'desc');
+    const it = { description: '', batch_no: '', manufacture_date: '', expiry_date: '', quantity: '', free: '', pack: '', pack_n: '', mrp: '', rate: '', disc: '', gst: '', amount: '', _dot: {} };
+    const mny = k => { const toks = (cells[k] || []).filter(t => money(t.t)); if (!toks.length) return ''; const m = money(toks[toks.length - 1].t); it._dot[k] = m.dot; return m.v };
+    // quantity, possibly "10+2"
+    const qtxt = cellText(cells, 'qty');
+    let q = qtxt.match(/(\d+(?:\.\d+)?)\s*\+\s*(\d+)/);
+    if (q) { it.quantity = +q[1]; it.free = +q[2] } else { const v = num(qtxt.split(' ').pop()); if (v !== '') it.quantity = v }
+    if (cells.free) { const v = num(cellText(cells, 'free').split(' ').pop()); if (v !== '') it.free = v }
+    it.mrp = mny('mrp'); it.rate = mny('rate'); it.amount = mny('amount');
+    const pct = k => { const t = cellText(cells, k).replace('%', ''); const v = num(t.split(' ').pop()); return v === '' ? '' : v };
+    it.disc = pct('disc'); it.gst = pct('gst');
+    it.batch_no = (cells.batch || []).map(t => t.t).join('').toUpperCase().replace(/[^A-Z0-9\-\/]/g, '');
+    it.expiry_date = parseMonthDate(cellText(cells, 'exp'), true);
+    it.manufacture_date = parseMonthDate(cellText(cells, 'mfg'), false);
+    it.pack = cellText(cells, 'pack');
+    // name: tidy, take inline batch/expiry/pack if the bill has no column for them
+    let words = desc.split(/\s+/).filter(Boolean);
+    if (!cols.has('sno') && words.length > 1 && /^\d{1,3}[.)]?$/.test(words[0])) words.shift();
+    const keep = [];
+    for (const w of words) {
+      const exp = /^(?:exp|e)[:.]?(.+)$/i.exec(w), bt = /^(?:b|batch|bno)[:.](.+)$/i.exec(w);
+      if (bt && looksBatch(bt[1])) { it.batch_no ||= bt[1].toUpperCase(); continue }
+      if (exp && parseMonthDate(exp[1], true)) { it.expiry_date ||= parseMonthDate(exp[1], true); continue }
+      keep.push(w);
+    }
+    it.description = keep.join(' ').replace(/\s+/g, ' ').replace(/^[^A-Za-z0-9(]+|[^A-Za-z0-9)%.]+$/g, '').trim();
+    if (!it.pack) { const m = it.description.match(/\b\d+\s*['’`]?S\b|\b\d+\s*[X*]\s*\d+\b/i); if (m) it.pack = m[0] }
+    it.pack_n = packSize(it.pack) || (SINGLE.test(it.description) ? 1 : '');
+    return it;
+  }
+
+  // use the maths of the row (qty x rate = amount) to repair missing decimal points and empty cells
+  function repairItem(it, dotShare = {}, exact = false, gstMode = '', qtyCol = false) {
+    const d = +it.disc || 0, g = +it.gst || 0;
+    const opts = k => { const v = it[k]; if (v === '' || v == null) return [v]; const o = [v]; if (!exact && !it._dot[k] && v >= 100) o.push(v / 100); return o };
+    // a number printed without its decimal point where the rest of the column has one
+    const prior = (k, v) => !exact && v !== '' && v === it[k] && !it._dot[k] && v >= 100 && (dotShare[k] || 0) >= 0.6 ? -1.6 : 0;
+    const qOpts = [+it.quantity || 0];
+    let best = null;
+    for (const r of opts('rate')) for (const a of opts('amount')) for (const m of opts('mrp')) {
+      // quantity that fits the row maths (OCR often adds a digit, e.g. "|50" -> "550")
+      if (a !== '' && a > 0) for (const [p, isMrp] of [[r, false], [m, true]]) if (p !== '' && p > 0) {
+        const q0 = qOpts[0], ratio = q0 && p ? q0 * p / a : 0;
+        if (isMrp && (it.rate !== '' || (it.pack_n !== 1 && ratio >= 1.5 && Math.abs(ratio - Math.round(ratio)) < 0.03 && ratio <= 100))) continue; // loose tablets sold from a strip
+        for (const f of [1 - d / 100, (1 - d / 100) * (1 + g / 100), 1]) { const e = a / (p * f), er = Math.round(e); if (e >= 0.5 && Math.abs(e - er) < 0.02 && !qOpts.includes(er) && (!isMrp || !q0 || lev(String(q0), String(er)) <= 1)) qOpts.push(er) }
+      }
+      for (const q of qOpts) {
+        let s = 0;
+        if (r !== '' && a !== '' && q) { const base = q * r * (1 - d / 100); if (near(base, a, 0.012)) s += gstMode === 'incl' && g ? 2.5 : 3; else if (near(base * (1 + g / 100), a, 0.012)) s += gstMode === 'excl' ? 2.5 : 3; else if (near(q * r, a, 0.03)) s += 2 }
+        if (m !== '' && r !== '' && m >= r * 0.98 && m <= r * 3) s += 1;
+        if (m !== '' && a !== '' && q && (near(q * m, a, 0.03) || (it.pack_n > 1 && near(q * m / it.pack_n, a, 0.03)))) s += 2;
+        else if (m !== '' && a > 0 && q && !it.rate && it.pack_n !== 1) { const ratio = q * m / a; if (ratio >= 1.5 && ratio <= 100 && Math.abs(ratio - Math.round(ratio)) < 0.03) s += 1.5 } // loose units from a pack
+        if (r !== '' && a !== '' && !q && a >= r) s += 0.5;
+        s += prior('rate', r) + prior('amount', a) + prior('mrp', m);
+        const changed = (r !== it.rate) + (a !== it.amount) + (m !== it.mrp) + (q !== qOpts[0]) * 1.5;
+        s -= changed * 0.6;
+        if (!best || s > best.s) best = { s, r, a, m, q };
+      }
+    }
+    if (best) {
+      for (const k of ['rate', 'amount', 'mrp']) if (best[k[0]] !== it[k]) { it[k] = round2(best[k[0]]); it._fixed = true; it._dot[k] = true }
+      if (best.q && best.q !== qOpts[0]) { it.quantity = best.q; it._fixed = true }
+      it._ok = (it.rate === '' && it.mrp === '') || best.s >= 1.5;
+    }
+    const q = +it.quantity || 0;
+    if (it.amount === '' && q && it.rate !== '') { it.amount = round2(q * it.rate * (1 - d / 100)); it._fixed = true }
+    if (it.amount === '' && q && it.mrp !== '' && !it.rate) { it.amount = round2(q * it.mrp); it._fixed = true }
+    if (!q && it.amount !== '' && it.rate) { const est = it.amount / (it.rate * (1 - d / 100)); const e2 = est / (1 + g / 100); if (Math.abs(est - Math.round(est)) < 0.05) it.quantity = Math.round(est); else if (Math.abs(e2 - Math.round(e2)) < 0.05) it.quantity = Math.round(e2); if (it.quantity) it._fixed = true }
+    // a line with only an amount ("Service fee 350.00") is one of it; a missing quantity is a misread only where the bill prints one
+    if (it.quantity === '' && it.amount !== '') { it.quantity = 1; if (qtyCol || it.rate !== '' || it.mrp !== '') it._fixed = true }
+    return it;
+  }
+
+  // an amount that lost its decimal point is put back when that makes the items match the bill's own total.
+  // Nothing else is changed to "make it fit": rows that still do not add up are flagged for the user to check.
+  function reconcile(items, t, exact = false) {
+    if (exact) return;
+    const sum = () => round2(items.reduce((s, i) => s + (+i.amount || 0), 0));
+    const targets = [t.sub, t.total !== '' ? t.total - (+t.tax || 0) + (+t.disc || 0) : '', t.total !== '' ? t.total + (+t.disc || 0) : '', t.total].filter(v => v !== '' && v > 0);
+    const hits = () => targets.some(v => Math.abs(v - sum()) <= 1.01);
+    if (!targets.length || hits()) return;
+    for (const it of items) {
+      if (it._dot && !it._dot.amount && +it.amount >= 100) {
+        const old = it.amount; it.amount = round2(old / 100);
+        if (hits()) { if (it.rate !== '' && !it._dot.rate && +it.rate >= 100 && +it.quantity && near(+it.quantity * it.rate / 100, it.amount, 0.03)) it.rate = round2(it.rate / 100); if (it.mrp !== '' && !it._dot.mrp && +it.mrp >= 100 && it.rate !== '' && it.mrp / 100 >= it.rate * 0.98) it.mrp = round2(it.mrp / 100); it._fixed = true; return }
+        it.amount = old;
+      }
+    }
+  }
+  /* ---------- table rows ---------- */
+  function readTable(lines, hdr, exact = false) {
+    const cols = [...hdr.cols].sort((a, b) => a.x0 - b.x0);
+    const kinds = new Set(cols.map(c => c.kind));
+    const widths = cols.map(c => c.x1 - c.x0), avg = widths.reduce((a, b) => a + b, 0) / widths.length;
+    const bounds = cols.map((c, i) => i < cols.length - 1 ? (c.x1 + cols[i + 1].x0) / 2 : Infinity);
+    const cen = c => (c.x0 + c.x1) / 2, c0 = cols[0], cN = cols[cols.length - 1], n = cols.length;
+    // first / last cells can be much wider than their centred header text
+    const left = Math.min(c0.x0 - avg * 1.2, n > 1 ? 2 * cen(c0) - bounds[0] - avg : -Infinity);
+    const right = Math.max(cN.x1 + avg * 1.2, n > 1 ? 2 * cen(cN) - bounds[n - 2] + avg : Infinity);
+    const descBatch = cols.some(c => c.kind === 'desc' && /batch/i.test(c.raw)) && !kinds.has('batch');
+    const colIdx = x => { for (let i = 0; i < n; i++) if (x < bounds[i]) return i; return n - 1 };
+    const colOf = x => cols[colIdx(x)].kind;
+    const di = cols.findIndex(c => c.kind === 'desc');
+    const WORDY = new Set(['desc', 'pack', 'mfr', 'party']);
+    const mid = t => (t.x0 + t.x1) / 2;
+    const items = [];
+    let pending = null, endAt = lines.length;
+    for (let i = hdr.i + 1; i < lines.length; i++) {
+      const l = lines[i];
+      if (SEP.test(l.text) || !l.toks.length) continue;
+      if (isSummary(l.text) || FOOTER.test(l.text) && !l.toks.some(t => /^\d{1,2}[\/\-.]\d{2,4}$/.test(t.t))) { endAt = i; break }
+      const toks = l.toks.filter(t => mid(t) >= left && mid(t) <= right);
+      if (!toks.length) continue;
+      const cells = {}, at = new Map();
+      for (const t of toks) { const ci = colIdx(mid(t)); at.set(t, ci); (cells[cols[ci].kind] ||= []).push(t) }
+      // name words that landed in a neighbouring column belong to the name
+      const own = (cells.desc || []).filter(t => letters(t.t) >= 2);
+      for (const k of Object.keys(cells)) if (!WORDY.has(k)) {
+        const spill = cells[k].filter(t => letters(t.t) >= 2 && !digits(t.t) && !/^(?:rs|inr)\.?$/i.test(t.t) &&
+          !((k === 'exp' || k === 'mfg') && monthOf(t.t)) && !(k === 'batch' && letters(t.t) <= 3 && cells[k].length > 1 && !(FORM.test(t.t) && cells[k].some(x => x !== t && looksBatch(x.t)))) &&
+          (di < 0 || Math.abs(at.get(t) - di) <= 1 || k === 'sno'));
+        if (spill.length) { (cells.desc ||= []).push(...spill); cells[k] = cells[k].filter(t => !spill.includes(t)); if (!cells[k].length) delete cells[k] }
+      }
+      if (cells.desc) {
+        const words = own.length ? own : cells.desc.filter(t => letters(t.t) >= 2);
+        if (words.length) {
+          const lo = Math.min(...words.map(t => t.x0)), hi = Math.max(...words.map(t => t.x1));
+          for (const k of Object.keys(cells)) if (k !== 'desc') {
+            const inside = cells[k].filter(t => mid(t) > lo && mid(t) < hi);
+            if (inside.length) { cells.desc.push(...inside); cells[k] = cells[k].filter(t => !inside.includes(t)); if (!cells[k].length) delete cells[k] }
+          }
+        }
+        cells.desc.sort((a, b) => a.x0 - b.x0);
+      }
+      const numericCols = ['qty', 'free', 'mrp', 'rate', 'amount', 'disc', 'gst', 'exp', 'hsn', 'batch'];
+      const hasNums = numericCols.some(k => (cells[k] || []).some(t => digits(t.t)));
+      const descT = cellText(cells, 'desc');
+      if (!hasNums) { // a text-only line: name of the next row, or the rest of the previous name
+        if (letters(descT || l.text) < 3) continue;
+        const nxt = lines.slice(i + 1).find(x => !SEP.test(x.text));
+        const nxtDesc = nxt ? nxt.toks.filter(t => colOf(mid(t)) === 'desc').map(t => t.t) : [];
+        const nxtIsDetail = nxt && !isSummary(nxt.text) && nxt.toks.some(t => colOf(mid(t)) !== 'desc' && digits(t.t)) && (nxtDesc.length === 0 || nxtDesc.length === 1 && looksBatch(nxtDesc[0]) || nxtDesc.every(w => letters(w) < 2));
+        const inDesc = di >= 0 && toks.every(t => colIdx(mid(t)) <= di + 1) && toks.length <= 6;
+        if (nxtIsDetail || descBatch) pending = toks.map(t => t.t).join(' ');
+        else if (inDesc && items.length && i - items[items.length - 1]._line <= 1 && (items[items.length - 1]._wrap || 0) < 2) { const p = items[items.length - 1]; p.description += ' ' + (descT || l.text); p._wrap = (p._wrap || 0) + 1; p._line = i }
+        continue;
+      }
+      if (pending) {
+        const dt = (cells.desc || []).map(t => t.t);
+        if (dt.length === 1 && looksBatch(dt[0])) { (cells.batch ||= []).push(cells.desc[0]); cells.desc = [] }
+        else if (dt.length && dt.every(w => letters(w) < 2)) cells.desc = [];
+        cells.desc = [{ t: pending, x0: 0, x1: 0 }, ...(cells.desc || [])];
+        pending = null;
+      } else if (descBatch && cells.desc && cells.desc.length === 1 && looksBatch(cells.desc[0].t) && items.length) {
+        continue;
+      }
+      const it = buildItem(cells, kinds);
+      if (letters(it.description) < 3 || /^(?:total|sub\s*total|grand|net)\b/i.test(it.description)) continue;
+      if (it.amount === '' && it.rate === '' && it.mrp === '' && it.quantity === '') continue;
+      it._line = i;
+      items.push(it);
+    }
+    const dotShare = {};
+    for (const k of ['rate', 'amount', 'mrp']) { const v = items.filter(it => it[k] !== '' && it[k] >= 1); if (v.length >= 3) dotShare[k] = v.filter(it => it._dot[k]).length / v.length }
+    // do the printed amounts include GST? (decided from rows that already add up)
+    let incl = 0, excl = 0;
+    for (const it of items) { const q = +it.quantity, r = +it.rate, a = +it.amount, d = +it.disc || 0, g = +it.gst || 0; if (!q || !r || !a || !g) continue; const base = q * r * (1 - d / 100); if (near(base, a, 0.012)) excl++; else if (near(base * (1 + g / 100), a, 0.012)) incl++ }
+    const gstMode = incl > excl ? 'incl' : excl > incl ? 'excl' : '';
+    return { items: items.map(it => { delete it._line; delete it._wrap; return repairItem(it, dotShare, exact, gstMode, kinds.has('qty')) }), endAt, kinds };
+  }
+
+  // no table header found: read item-like lines ("Name .... qty rate amount")
+  function readLoose(lines, from, to) {
+    const items = [];
+    const META = /\b(?:bill|invoice|receipt|date|gstin|gst\s*no|phone|ph|mobile|cell|email|address|patient|age|sex|uhid|ip\s*no|dr\.|doctor|ref|consultant|admission|discharge|pin|road|street|nagar|colony|district|state|andhra|telangana|karnataka|tamil|india|dl\s*no|d\.l|payment|mode|paid|thank|signature|signatory|authori[sz]ed|service\s*no|meter|category|due|units\s*consumed|name|to,?|m\/s)\b/i;
+    for (let i = from; i < to; i++) {
+      const l = lines[i];
+      if (SEP.test(l.text) || isSummary(l.text) || META.test(l.text)) continue;
+      const toks = l.toks.map(t => t.t);
+      let j = toks.length;
+      while (j > 0 && (money(toks[j - 1]) || isPct(toks[j - 1])) && !(letters(toks[j - 1]) > 1)) j--;
+      const nums = toks.slice(j).filter(t => !isPct(t)).map(t => money(t)).filter(Boolean);
+      const name = toks.slice(0, j).join(' ').replace(/^\d{1,3}[.)]?\s+/, '').trim();
+      if (!nums.length || letters(name) < 3) continue;
+      const last = nums[nums.length - 1];
+      if (!last.dot && nums.length === 1 && last.v < 10) continue;
+      const it = { description: name, batch_no: '', manufacture_date: '', expiry_date: '', quantity: 1, free: '', pack: '', pack_n: '', mrp: '', rate: '', disc: '', gst: '', amount: last.v, _ok: true, _fixed: false, _dot: { amount: last.dot } };
+      if (nums.length >= 3) {
+        const [q, r] = nums.slice(-3, -1);
+        if (near(q.v * r.v, last.v, 0.02)) { it.quantity = q.v; it.rate = r.v }
+        else if (near(nums[0].v * nums[1].v, last.v, 0.02)) { it.quantity = nums[0].v; it.rate = nums[1].v }
+      } else if (nums.length === 2) {
+        const [a] = nums;
+        if (!a.dot && a.v >= 1 && a.v <= 1000 && last.v / a.v >= 1) { it.quantity = a.v; it.rate = round2(last.v / a.v) }
+        else if (near(a.v, last.v)) it.rate = a.v;
+      }
+      if (!it.rate) it.rate = round2(it.amount / (it.quantity || 1));
+      items.push(it);
+    }
+    return items;
+  }
+
+  /* ---------- amount in words ("Rupees Six Thousand Five Hundred Only") ---------- */
+  const W1 = { zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19, twenty: 20, thirty: 30, forty: 40, fourty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90 };
+  const SCALE = { thousand: 1e3, lakh: 1e5, lakhs: 1e5, lac: 1e5, lacs: 1e5, crore: 1e7, crores: 1e7, million: 1e6 };
+  function wordsAmount(text) {
+    const m = String(text).match(/rupees?\s+([a-z\s\-]+?)(?:\s+and\s+([a-z\s\-]+?)\s+paise)?\s+only\b/i);
+    if (!m) return '';
+    const fix = w => { if (W1[w] !== undefined || SCALE[w] || w === 'hundred' || w === 'and' || w.length < 4) return w; let b = w, bd = 9; for (const k of [...Object.keys(W1), ...Object.keys(SCALE), 'hundred']) { const d = lev(w, k); if (d < bd) { bd = d; b = k } } return bd <= (w.length >= 7 ? 2 : 1) ? b : w };
+    const conv = str => { let total = 0, cur = 0, any = false; for (const w0 of str.toLowerCase().split(/[\s\-]+/).filter(Boolean)) { const w = fix(w0); if (w === 'and') continue; if (W1[w] !== undefined) { cur += W1[w]; any = true } else if (w === 'hundred') { cur = (cur || 1) * 100; any = true } else if (SCALE[w]) { total += (cur || 1) * SCALE[w]; cur = 0; any = true } else return null } return any ? total + cur : null };
+    const r = conv(m[1]); if (r === null || r <= 0) return '';
+    const p = m[2] ? conv(m[2]) : 0;
+    return round2(r + (p || 0) / 100);
+  }
+
+  /* ---------- bill-level fields ---------- */
+  const firstMoneyAfter = (text, idx) => {
+    const toks = text.slice(idx).split(/\s+/).filter(Boolean);
+    for (let i = 0; i < toks.length; i++) { const t = toks[i]; if (isPct(t) || /^@/.test(toks[i - 1] || '')) continue; const m = money(t); if (m && (m.dot || m.v >= 1)) return m.v }
+    return '';
+  };
+  const lastMoney = text => {
+    const toks = text.split(/\s+/).filter(Boolean);
+    for (let i = toks.length - 1; i >= 0; i--) { const t = toks[i]; if (isPct(t) || /^@$/.test(toks[i - 1] || '')) continue; if (letters(t) > 2) break; const m = money(t); if (m) return m }
+    return null;
+  };
+  function billNumber(lines) {
+    const pats = [
+      /\b(?:tax\s*)?(?:invoice|inv|bill|receipt|rcpt|cash\s*memo|memo|challan|voucher)\s*\.?\s*(?:no|number|num|n0|#)\b\.?\s*[:#\-.]?\s*([A-Z0-9][A-Z0-9\/\-._]{0,30})/i,
+      /\b(?:invoice|bill|receipt)\s*[:#]\s*([A-Z0-9][A-Z0-9\/\-._]{1,30})/i,
+      /\b(?:doc(?:ument)?|ref(?:erence)?|order)\s*\.?\s*(?:no|number|#)\.?\s*[:#\-.]?\s*([A-Z0-9][A-Z0-9\/\-._]{1,30})/i,
+      /\b(?:service|consumer|connection|account|sc)\s*\.?\s*(?:no|number|#)\.?\s*[:#\-.]?\s*([A-Z0-9][A-Z0-9\/\- ]{3,30})/i,
+    ];
+    for (const re of pats) for (const l of lines) {
+      const m = l.text.match(re);
+      if (!m) continue;
+      let v = m[1].replace(/[.\-\/]+$/, '');
+      if (re === pats[3]) v = v.replace(/\s+(?=\d)/g, '').split(' ')[0];
+      if (digits(v) >= 1 && v.length >= 2 && !/^(?:date|dt)$/i.test(v) && !/^\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}$/.test(v)) return v;
+    }
+    for (const l of lines) { // OCR-damaged keyword: "lnvoice No", "Bil No", "Recelpt No"
+      const toks = l.toks.map(t => t.t);
+      for (let i = 1; i < toks.length - 1; i++) {
+        if (!/^(?:no|n0|number|#)$/i.test(toks[i].replace(/[^a-z0-9#]/gi, ''))) continue;
+        const kw = hkey(toks[i - 1]);
+        if (!['invoice', 'bill', 'receipt', 'voucher'].some(w => lev(kw, w) <= (w.length >= 6 ? 2 : 1))) continue;
+        const v = toks.slice(i + 1).find(t => !/^[:#.\-]+$/.test(t));
+        if (v && digits(v) >= 1 && !findDates(v).length) return v.replace(/^[:#.\-]+/, '');
+      }
+    }
+    return '';
+  }
+  function billDate(lines, today) {
+    const BAD = /(?:due|exp(?:iry)?|mfg|manuf|admi(?:ssion|tted|t)|discharg|birth|dob|report|sample|collect|deliver|order|valid|from|to\s*date|issue)/i;
+    for (const l of lines) {
+      const re = /\b(?:(invoice|inv|bill|receipt|billing|voucher|cash\s*memo)\s*)?(?:date|dt|dated)\b\.?\s*[:\-]?/ig;
+      let m;
+      while ((m = re.exec(l.text))) {
+        const before = l.text.slice(Math.max(0, m.index - 14), m.index);
+        if (!m[1] && BAD.test(before)) continue;
+        const d = findDates(l.text.slice(m.index + m[0].length, m.index + m[0].length + 28), today)[0];
+        if (d) return d.v;
+      }
+    }
+    const top = Math.max(6, Math.ceil(lines.length * 0.45));
+    for (const l of lines.slice(0, top)) { if (BAD.test(l.text)) continue; const d = findDates(l.text, today)[0]; if (d) return d.v }
+    return '';
+  }
+  function totals(lines, from) {
+    const PRI = [
+      /\b(?:grand\s*total|net\s*payable|amount\s*payable|total\s*payable|net\s*amount|net\s*amt|bill\s*amount|invoice\s*(?:total|amount|value)|amount\s*due|total\s*due|net\s*total|total\s*bill\s*amount|net\s*value)\b/i,
+      /\b(?:total\s*amount|total\s*amt|total\s*rs|total)\b(?!\s*(?:qty|quantity|items?|units|disc|discount|gst|tax|savings|mrp|no))/i,
+    ];
+    let total = '', sub = '';
+    for (const re of PRI) {
+      for (let i = lines.length - 1; i >= from; i--) {
+        const l = lines[i];
+        const m = l.text.match(re);
+        if (!m) continue;
+        let v = firstMoneyAfter(l.text, m.index + m[0].length);
+        if (v === '' && lines[i + 1] && !/[a-z]{3}/i.test(lines[i + 1].text)) { const lm = lastMoney(lines[i + 1].text); if (lm) v = lm.v }
+        if (v !== '' && v > 0) { total = v; break }
+      }
+      if (total !== '') break;
+    }
+    for (let i = from; i < lines.length; i++) { const m = lines[i].text.match(/\b(?:sub\s*-?\s*total|gross\s*(?:amount|amt|total|value)|taxable\s*(?:amount|value))\b/i); if (m) { const v = firstMoneyAfter(lines[i].text, m.index + m[0].length); if (v !== '') sub = v } }
+    let tax = 0, taxSeen = false;
+    for (let i = from; i < lines.length; i++) {
+      const t = lines[i].text;
+      if (!isSummary(t) && !/\b[csi]\s*gst\b/i.test(t)) continue;
+      const re = /\b([csiu]\s*gst|gst|vat|tax\s*amount|total\s*tax)\b/ig;
+      let m;
+      while ((m = re.exec(t))) { const v = firstMoneyAfter(t, m.index + m[0].length); if (v !== '' && v < 1e7) { tax += v; taxSeen = true } }
+    }
+    let disc = '';
+    for (let i = from; i < lines.length; i++) { const t = lines[i].text, m = t.match(/\b(?:less\s*:?\s*)?(?:discount|disc\s*amt|cash\s*discount)\b/i); if (m && isSummary(t)) { const v = firstMoneyAfter(t, m.index + m[0].length); if (v !== '') disc = v } }
+    let roff = 0;
+    for (let i = from; i < lines.length; i++) { const t = lines[i].text, m = t.match(/\bround(?:ed)?\s*(?:off|of)\b|\br\s*\/\s*o\b/i); if (m) { const v = firstMoneyAfter(t, m.index + m[0].length); if (v !== '' && Math.abs(v) < 1) roff = v } }
+    return { total, sub, tax: taxSeen ? round2(tax) : '', disc, roff };
+  }
+  function paymentMode(text) {
+    const m = text.match(/\b(?:payment\s*(?:mode|terms|method|type)?|paid\s*(?:by|via|through|in)|mode\s*of\s*payment|pay\s*mode|mode)\s*[:\-]?\s*(cash|upi|card|credit\s*card|debit\s*card|credit|cheque|check|neft|rtgs|imps|bank\s*transfer|online|gpay|google\s*pay|phonepe|paytm|net\s*banking)\b/i);
+    return m ? m[1].replace(/\s+/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).replace('Upi', 'UPI').replace('Neft', 'NEFT').replace('Rtgs', 'RTGS').replace('Imps', 'IMPS') : '';
+  }
+
+  /* ---------- bill type ---------- */
+  const TYPE_KEYS = ['medicine_purchase', 'pharmacy_sales', 'patient', 'lab', 'expense'];
+  function classify(lines, items, kinds, ctx = {}) {
+    const all = lines.map(l => l.text).join('\n'), low = all.toLowerCase();
+    const topN = Math.max(4, Math.ceil(lines.length * 0.2)), top = lines.slice(0, topN).map(l => l.text).join('\n').toLowerCase();
+    const s = { medicine_purchase: 0, pharmacy_sales: 0, patient: 0, lab: 0, expense: 0 };
+    const add = (k, v) => { s[k] += v };
+    const count = (re, txt = low) => (txt.match(re) || []).length;
+    const medCols = ['batch', 'exp', 'mrp', 'pack', 'hsn', 'free', 'mfg', 'mfr'].filter(k => kinds.has(k)).length;
+    const medItems = items.filter(i => FORM.test(i.description) || i.batch_no || i.expiry_date).length;
+    const isMed = medCols >= 2 || (items.length && medItems >= Math.max(2, items.length * 0.5));
+    const hosp = (ctx.hospitalKey || '').toLowerCase();
+    const hospTop = hosp && lines.slice(0, 3).some(l => l.text.toLowerCase().replace(/[^a-z]/g, '').includes(hosp));
+    const hospLater = hosp && lines.slice(3).some(l => l.text.toLowerCase().replace(/[^a-z]/g, '').includes(hosp));
+    // medicine bills: bought (purchase) or sold (pharmacy sale)?
+    if (/tax\s*invoice|gst\s*invoice/.test(low)) add('medicine_purchase', 1);
+    if (/distribut|agenc|wholesale|traders|enterprises|pharma(?!cy)|pharmaceutical|marketing|stockist|\bc\s*&\s*f\b/.test(top)) add('medicine_purchase', 2.5);
+    if (kinds.has('free')) add('medicine_purchase', 2);
+    if (/\bptr\b|\bpts\b/.test(low)) add('medicine_purchase', 2);
+    if (kinds.has('hsn')) add('medicine_purchase', 1);
+    if (/due\s*date|\bm\/s\b|bill\s*to|buyer|consignee|ship\s*to|sold\s*to|purchase/.test(low)) add('medicine_purchase', 1.5);
+    if (kinds.has('rate') && kinds.has('mrp')) add('medicine_purchase', 1);
+    if (hospLater && !hospTop) add('medicine_purchase', 2);
+    if (items.length && items.every(i => +i.quantity >= 5) && kinds.has('rate')) add('medicine_purchase', 1);
+    if (/patient|pt\.?\s*name|\buhid\b|age\s*\/?\s*sex|\bdr\.|doctor|prescri|consultant|ref\.?\s*by/.test(low)) add('pharmacy_sales', 2.5);
+    if (/cash\s*bill|cash\s*memo|retail|pharmacy\s*bill|sale\s*bill|get\s*well/.test(low)) add('pharmacy_sales', 2);
+    if (hospTop) { add('pharmacy_sales', 2.5); add('patient', 1.5); add('lab', 1.5) }
+    if (/pharmacy/.test(top)) add('pharmacy_sales', 1.5);
+    if (items.length && items.every(i => +i.quantity > 0 && +i.quantity <= 30)) add('pharmacy_sales', 0.5);
+    // lab
+    const labWords = /laborator|\blab\b|diagnost|patholog|radiolog|investigation|test\s*name|\btests?\b|sample|specimen/g;
+    add('lab', Math.min(6, count(labWords) * 2));
+    const labItem = /\b(?:cbc|blood|urine|lipid|thyroid|tsh|t3|t4|sugar|glucose|hba1c|creatinine|urea|lft|kft|rft|culture|profile|serum|ha?emoglobin|platelet|esr|crp|vitamin|widal|dengue|malaria|x-?ray|scan|ultrasound|usg|ecg|echo|mri|ct|stool|sputum|biopsy|hiv|hbsag|electrolytes|bilirubin)\b/i;
+    add('lab', Math.min(5, items.filter(i => labItem.test(i.description)).length * 1.2));
+    // hospital (patient) bill
+    const ptWords = /in-?\s*patient|\bip\s*(?:no|bill)|\bop\s*(?:no|bill)|out-?\s*patient|admission|admitted|discharge|\bward\b|\broom\b|\bbed\b|nursing|consultation|procedure|surgery|operation|\bot\s*charges|\bicu\b|final\s*bill|patient\s*bill|doctor'?s?\s*fee|registration|dressing|injection\s*charges|hospital\s*charges/g;
+    add('patient', Math.min(7, count(ptWords) * 1.5));
+    // other expenses
+    const exWords = /electric|\bpower\b|units\s*consumed|meter|service\s*no|water\s*(?:bill|charges|supply)|internet|broadband|\brent\b|maintenance|repair|servicing|\bamc\b|plumb|stationer|diesel|petrol|fuel|generator|\bwire|\bmcb\b|cleaning|housekeep|laundry|printing|transport|courier|salary|furniture|computer|software|telephone|mobile\s*bill|electrical|hardware|cement|paint|carpent|oxygen\s*cylinder|refill/g;
+    add('expense', Math.min(7, count(exWords) * 1.5));
+    if (hospLater && !hospTop && !isMed) add('expense', 2);
+    if (isMed) { add('medicine_purchase', 3); add('pharmacy_sales', 3); add('lab', -4); add('patient', -4); add('expense', -4) }
+    else { add('medicine_purchase', -3); add('pharmacy_sales', -3) }
+    if (ctx.prior && s[ctx.prior] !== undefined) add(ctx.prior, 3);
+    const ranked = TYPE_KEYS.slice().sort((a, b) => s[b] - s[a]);
+    const [a, b] = ranked;
+    const sure = s[a] >= 4 && s[a] - s[b] >= 2;
+    return { type: a, sure, scores: s, isMed: !!isMed };
+  }
+
+  /* ---------- main ---------- */
+  function parse(doc, ctx = {}) {
+    const today = ctx.today ? new Date(ctx.today) : new Date();
+    const lines = prepareDoc(doc);
+    const text = lines.map(l => l.text).join('\n');
+    const hdr = findHeader(lines, doc.source === 'sheet');
+    let items = [], kinds = new Set();
+    if (hdr) { const r = readTable(lines, hdr, doc.source === 'sheet'); items = r.items; kinds = r.kinds }
+    if (!items.length && doc.source !== 'sheet') items = readLoose(lines, hdr ? hdr.i + 1 : 0, lines.length);
+    const d = { bill_number: '', bill_date: '', party_ref: '', payment_mode: '', total_amount: '', tax_amount: '', discount_amount: '', subtotal: '', items, warnings: [] };
+    // header fields from table columns (spreadsheet exports repeat them per row)
+    if (hdr) {
+      const cols = hdr.cols.slice().sort((a, b) => a.x0 - b.x0);
+      const first = lines[hdr.i + 1];
+      if (first) for (const c of cols) {
+        if (!['billno', 'billdate', 'party'].includes(c.kind)) continue;
+        const tk = first.toks.filter(t => (t.x0 + t.x1) / 2 >= c.x0 - 5 && (t.x0 + t.x1) / 2 <= c.x1 + 5).map(t => t.t).join(' ');
+        if (c.kind === 'billno' && tk) d.bill_number = tk;
+        if (c.kind === 'billdate') d.bill_date = (findDates(tk, today)[0] || {}).v || '';
+        if (c.kind === 'party') d.party_name = tk;
+      }
+    }
+    d.bill_number ||= billNumber(lines);
+    d.bill_date ||= billDate(lines, today);
+    const t = totals(lines, hdr ? hdr.i + 1 : 0);
+    reconcile(items, t, doc.source === 'sheet');
+    const itemsSum = round2(items.reduce((s, i) => s + (+i.amount || 0), 0));
+    const calc = round2((t.sub || itemsSum) + (+t.tax || 0) - (+t.disc || 0) + (t.roff || 0));
+    d.total_amount = t.total; d.tax_amount = t.tax; d.discount_amount = t.disc; d.subtotal = t.sub;
+    if (d.tax_amount !== '' && (t.total !== '' ? d.tax_amount > t.total * 0.5 : itemsSum && d.tax_amount > itemsSum)) d.tax_amount = '';
+    if (d.total_amount !== '' && itemsSum > 0 && d.total_amount < itemsSum * 0.5) d.total_amount = '';
+    const inWords = wordsAmount(text);
+    if (inWords !== '' && (d.total_amount === '' || Math.abs(inWords - d.total_amount) > 1 && (Math.abs(inWords - calc) <= 1.01 || !near(calc, d.total_amount, 0.015)))) d.total_amount = inWords;
+    if (d.total_amount === '' && itemsSum > 0) { d.total_amount = calc; d.warnings.push('total_calculated') }
+    if (d.total_amount !== '' && itemsSum > 0 && d.total_amount > itemsSum * 2.2) d.warnings.push('items_missing');
+    const gst = text.match(/\b(\d{2}[A-Z]{5}\d{4}[A-Z][A-Z0-9]{3})\b/);
+    const pid = text.match(/\b(?:uhid|mrn|patient\s*id|reg(?:istration)?\.?\s*no|ip\s*no|op\s*no)\.?\s*[:\-]?\s*([A-Z0-9][A-Z0-9\/\-]{2,})/i);
+    d.gstin = gst ? gst[1] : ''; d.patient_id = pid ? pid[1] : '';
+    d.payment_mode = paymentMode(text);
+    const cls = classify(lines, items, kinds, ctx);
+    d.type = cls.type; d.type_sure = cls.sure; d.type_scores = cls.scores;
+    d.party_ref = ['medicine_purchase', 'expense'].includes(d.type) ? d.gstin : (d.patient_id || '');
+    d.items_sum = itemsSum;
+    for (const it of items) { it.unclear = !!it._fixed || it._ok === false; delete it._dot; delete it._ok; delete it._fixed }
+    d.text = text;
+    return d;
+  }
+
+  return { lev, parse, findDates, parseMonthDate, money, packSize, classify, prepareDoc, isSummary, FORM, SINGLE, TYPE_KEYS };
+})();
+if (typeof module !== 'undefined') module.exports = BillParser;
+</script>
+<script>
+/* ===== Photo clean-up before offline reading: straighten, even out light, remove table lines ===== */
+const BillImage = (() => {
+  function gray(ctx, w, h) {
+    const d = ctx.getImageData(0, 0, w, h).data, g = new Float32Array(w * h);
+    for (let i = 0, j = 0; j < g.length; i += 4, j++) g[j] = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+    return g;
+  }
+  function maxFilter(src, w, h, r) {
+    const tmp = new Float32Array(w * h), out = new Float32Array(w * h);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { let m = 0; for (let k = -r; k <= r; k++) { const v = src[y * w + Math.min(w - 1, Math.max(0, x + k))]; if (v > m) m = v } tmp[y * w + x] = m }
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { let m = 0; for (let k = -r; k <= r; k++) { const v = tmp[Math.min(h - 1, Math.max(0, y + k)) * w + x]; if (v > m) m = v } out[y * w + x] = m }
+    return out;
+  }
+  function boxBlur(src, w, h, r) {
+    const W = w + 1, I = new Uint32Array(W * (h + 1));
+    for (let y = 0; y < h; y++) { let s = 0; for (let x = 0; x < w; x++) { s += src[y * w + x] | 0; I[(y + 1) * W + x + 1] = I[y * W + x + 1] + s } }
+    const out = new Float32Array(w * h);
+    for (let y = 0; y < h; y++) {
+      const y0 = Math.max(0, y - r), y1 = Math.min(h, y + r + 1);
+      for (let x = 0; x < w; x++) { const x0 = Math.max(0, x - r), x1 = Math.min(w, x + r + 1); out[y * w + x] = (I[y1 * W + x1] - I[y0 * W + x1] - I[y1 * W + x0] + I[y0 * W + x0]) / ((x1 - x0) * (y1 - y0)) }
+    }
+    return out;
+  }
+  // the bright sheet of paper against a darker table; null when the bill fills the photo
+  function paperMask(g, w, h, maxFrac = 0.9) {
+    const f = Math.max(2, Math.round(Math.max(w, h) / 220)), sw = Math.floor(w / f), sh = Math.floor(h / f), sm = new Float32Array(sw * sh), N = sw * sh;
+    for (let y = 0; y < sh; y++) for (let x = 0; x < sw; x++) { let s = 0; for (let yy = 0; yy < f; yy++) for (let xx = 0; xx < f; xx++) s += g[(y * f + yy) * w + x * f + xx]; sm[y * sw + x] = s / (f * f) }
+    const hist = new Float64Array(256); for (const v of sm) hist[Math.min(255, v | 0)]++;
+    let sum = 0; for (let i = 0; i < 256; i++) sum += i * hist[i];
+    let wB = 0, sB = 0, best = 0, thr = 128;
+    for (let t = 0; t < 256; t++) { wB += hist[t]; if (!wB) continue; const wF = N - wB; if (!wF) break; sB += t * hist[t]; const v = wB * wF * (sB / wB - (sum - sB) / wF) ** 2; if (v > best) { best = v; thr = t } }
+    const lab = new Int32Array(N).fill(-1); let bestId = -1, bestN = 0;
+    for (let i = 0; i < N; i++) {
+      if (lab[i] !== -1 || sm[i] <= thr) continue;
+      const stack = [i]; lab[i] = i; let n = 0;
+      while (stack.length) { const p = stack.pop(); n++; const x = p % sw, y = (p / sw) | 0; for (const q of [x > 0 ? p - 1 : -1, x < sw - 1 ? p + 1 : -1, y > 0 ? p - sw : -1, y < sh - 1 ? p + sw : -1]) if (q >= 0 && lab[q] === -1 && sm[q] > thr) { lab[q] = i; stack.push(q) } }
+      if (n > bestN) { bestN = n; bestId = i }
+    }
+    if (bestN > N * maxFrac || bestN < N * 0.2) return null;
+    const keep = new Uint8Array(N);
+    for (let y = 0; y < sh; y++) { let a = -1, b = -1; for (let x = 0; x < sw; x++) if (lab[y * sw + x] === bestId) { if (a < 0) a = x; b = x } if (a >= 0) for (let x = Math.max(0, a - 1); x <= Math.min(sw - 1, b + 1); x++) keep[y * sw + x] = 1 }
+    return { f, sw, sh, keep };
+  }
+  // small-angle tilt from the horizontal profile of dark (text) pixels
+  function estimateSkew(n, w, h) {
+    const f = Math.max(1, Math.round(Math.max(w, h) / 700)), sw = Math.floor(w / f), sh = Math.floor(h / f), xs = [], ys = [];
+    for (let y = 0; y < sh; y++) for (let x = 0; x < sw; x++) { let s = 0; for (let yy = 0; yy < f; yy++) for (let xx = 0; xx < f; xx++) s += n[(y * f + yy) * w + x * f + xx]; if (s / (f * f) < 140) { xs.push(x); ys.push(y) } }
+    if (xs.length < 200) return 0;
+    const score = a => { const r = a * Math.PI / 180, c = Math.cos(r), si = Math.sin(r), bins = new Float64Array(sh + 2 * sw + 4); for (let i = 0; i < xs.length; i++) bins[Math.round(ys[i] * c - xs[i] * si + sw)]++; let q = 0; for (const b of bins) q += b * b; return q };
+    let best = 0, bs = -1;
+    for (let a = -12; a <= 12; a += 0.5) { const v = score(a); if (v > bs) { bs = v; best = a } }
+    const c0 = best; for (let a = c0 - 0.5; a <= c0 + 0.5; a += 0.1) { const v = score(a); if (v > bs) { bs = v; best = a } }
+    return Math.abs(best) < 0.15 ? 0 : best;
+  }
+  // is the text running sideways? letters of a word sit side by side, so look at which way each letter's nearest neighbour lies
+  function sideways(img) {
+    const w0 = img.naturalWidth || img.width, h0 = img.naturalHeight || img.height, s = Math.min(1, 1000 / Math.max(w0, h0));
+    const w = Math.max(1, Math.round(w0 * s)), h = Math.max(1, Math.round(h0 * s));
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const ctx = c.getContext('2d', { willReadFrequently: true }); ctx.drawImage(img, 0, 0, w, h);
+    const g = gray(ctx, w, h), bg = boxBlur(maxFilter(g, w, h, 5), w, h, 5), ink = new Uint8Array(w * h);
+    for (let i = 0; i < g.length; i++) ink[i] = g[i] / Math.max(1, bg[i]) < 0.62 ? 1 : 0;
+    const seen = new Uint8Array(w * h), boxes = [];
+    for (let i = 0; i < w * h; i++) {
+      if (!ink[i] || seen[i]) continue;
+      const st = [i]; seen[i] = 1; let x0 = w, x1 = 0, y0 = h, y1 = 0, n = 0;
+      while (st.length) { const p = st.pop(), x = p % w, y = (p / w) | 0; n++; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; for (const q of [x > 0 ? p - 1 : -1, x < w - 1 ? p + 1 : -1, y > 0 ? p - w : -1, y < h - 1 ? p + w : -1]) if (q >= 0 && ink[q] && !seen[q]) { seen[q] = 1; st.push(q) } }
+      const bw = x1 - x0 + 1, bh = y1 - y0 + 1;
+      if (bw >= 2 && bh >= 2 && bw <= 30 && bh <= 30 && n >= 4) boxes.push({ x: (x0 + x1) / 2, y: (y0 + y1) / 2, s: Math.max(bw, bh) });
+    }
+    if (boxes.length < 40) return false;
+    const cell = 30, grid = new Map(), key = (gx, gy) => gx * 100000 + gy;
+    boxes.forEach((b, i) => { const k = key(Math.floor(b.x / cell), Math.floor(b.y / cell)); if (!grid.has(k)) grid.set(k, []); grid.get(k).push(i) });
+    let hor = 0, ver = 0;
+    boxes.forEach((b, i) => {
+      let best = null, bd = Infinity; const gx = Math.floor(b.x / cell), gy = Math.floor(b.y / cell);
+      for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (const j of grid.get(key(gx + dx, gy + dy)) || []) { if (j === i) continue; const o = boxes[j], d = (o.x - b.x) ** 2 + (o.y - b.y) ** 2; if (d < bd) { bd = d; best = o } }
+      if (!best || bd > (b.s * 2.5) ** 2) return;
+      if (Math.abs(best.x - b.x) > Math.abs(best.y - b.y)) hor++; else ver++;
+    });
+    return ver > hor * 1.4 && ver >= 30;
+  }
+  // img: <img> or <canvas>; rot: quarter turns clockwise chosen by the user
+  function prepare(img, rot = 0, opts = {}) {
+    const maxSide = opts.maxSide || 2400, turn = ((rot % 4) + 4) % 4;
+    const w0 = img.naturalWidth || img.width, h0 = img.naturalHeight || img.height, long = Math.max(w0, h0);
+    let s = 1;
+    if (long > maxSide) s = maxSide / long; else if (long < 1300) s = Math.min(2, 1800 / long);
+    const sw0 = Math.round(w0 * s), sh0 = Math.round(h0 * s), w = turn % 2 ? sh0 : sw0, h = turn % 2 ? sw0 : sh0;
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const ctx = c.getContext('2d', { willReadFrequently: true });
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); ctx.imageSmoothingQuality = 'high';
+    ctx.save(); ctx.translate(w / 2, h / 2); ctx.rotate(turn * Math.PI / 2); ctx.drawImage(img, -sw0 / 2, -sh0 / 2, sw0, sh0); ctx.restore();
+    const g = gray(ctx, w, h);
+    // even out the light: divide by an estimate of the paper brightness
+    const f = Math.max(4, Math.round(Math.max(w, h) / 300)), bw = Math.ceil(w / f), bh = Math.ceil(h / f), small = new Float32Array(bw * bh);
+    for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) { let m = 0; for (let yy = y * f; yy < Math.min(h, (y + 1) * f); yy++) for (let xx = x * f; xx < Math.min(w, (x + 1) * f); xx++) { const v = g[yy * w + xx]; if (v > m) m = v } small[y * bw + x] = m }
+    const bg = boxBlur(maxFilter(small, bw, bh, 3), bw, bh, 3);
+    let n = new Float32Array(w * h);
+    for (let y = 0; y < h; y++) {
+      const fy = Math.min(bh - 1.001, Math.max(0, y / f - 0.5)), y0 = Math.floor(fy), ty = fy - y0;
+      for (let x = 0; x < w; x++) { const fx = Math.min(bw - 1.001, Math.max(0, x / f - 0.5)), x0 = Math.floor(fx), tx = fx - x0, i = y0 * bw + x0; const b = (bg[i] * (1 - tx) + bg[i + 1] * tx) * (1 - ty) + (bg[i + bw] * (1 - tx) + bg[i + bw + 1] * tx) * ty; n[y * w + x] = Math.min(255, g[y * w + x] / Math.max(b, 1) * 255) }
+    }
+    const pm = paperMask(g, w, h);
+    if (pm) for (let y = 0; y < h; y++) { const sy = Math.min(pm.sh - 1, (y / pm.f) | 0); for (let x = 0; x < w; x++) if (!pm.keep[sy * pm.sw + Math.min(pm.sw - 1, (x / pm.f) | 0)]) n[y * w + x] = 255 }
+    const hist = new Uint32Array(256); for (const v of n) hist[v | 0]++;
+    let acc = 0, lo = 0; for (let i = 0; i < 256; i++) { acc += hist[i]; if (acc > n.length * 0.01) { lo = i; break } }
+    const k = 255 / Math.max(1, 250 - lo);
+    for (let i = 0; i < n.length; i++) n[i] = Math.max(0, Math.min(255, (n[i] - lo) * k));
+    // straighten a slightly tilted photo
+    const ang = opts.noDeskew ? 0 : estimateSkew(n, w, h);
+    if (ang) {
+      const t = ctx.createImageData(w, h); for (let i = 0; i < n.length; i++) { const o = i * 4; t.data[o] = t.data[o + 1] = t.data[o + 2] = n[i]; t.data[o + 3] = 255 }
+      const tc = document.createElement('canvas'); tc.width = w; tc.height = h; tc.getContext('2d').putImageData(t, 0, 0);
+      ctx.save(); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); ctx.translate(w / 2, h / 2); ctx.rotate(-ang * Math.PI / 180); ctx.drawImage(tc, -w / 2, -h / 2); ctx.restore();
+      n = gray(ctx, w, h);
+    }
+    // remove table lines (they confuse the reader) without touching letters:
+    // a line is long, nearly unbroken and thin; a row of text has gaps between letters and thick strokes
+    const mean = boxBlur(n, w, h, 15), dark = new Uint8Array(w * h);
+    for (let i = 0; i < n.length; i++) dark[i] = n[i] < mean[i] - 12 && n[i] < 200 ? 1 : 0;
+    const T = Math.round(Math.max(4, Math.max(w, h) / 350) * (opts.tMul || 2.2)), vrun = new Uint16Array(w * h), hrun = new Uint16Array(w * h);
+    for (let x = 0; x < w; x++) { let y = 0; while (y < h) { if (!dark[y * w + x]) { y++; continue } let e = y; while (e < h && dark[e * w + x]) e++; for (let q = y; q < e; q++) vrun[q * w + x] = Math.min(65535, e - y); y = e } }
+    for (let y = 0; y < h; y++) { let x = 0; while (x < w) { if (!dark[y * w + x]) { x++; continue } let e = x; while (e < w && dark[y * w + e]) e++; for (let q = x; q < e; q++) hrun[y * w + q] = Math.min(65535, e - x); x = e } }
+    const line = new Uint8Array(w * h), LH = Math.max(40, Math.round(w / 25)), LV = Math.max(40, Math.round(h / 25)), GAP = 2;
+    for (let y = 1; y < h - 1; y++) {
+      let a = -1, last = -1, thin = 0;
+      const close = () => {
+        if (a >= 0 && last - a + 1 >= LH && thin >= (last - a + 1) * 0.7)
+          for (let q = a; q <= last; q++) for (const yy of [y - 1, y, y + 1]) { const i = yy * w + q; if (dark[i] && (vrun[i] <= T || hrun[i] <= T)) line[i] = 1 }
+      };
+      for (let x = 0; x < w; x++) {
+        const i = y * w + x, on = dark[i] || dark[i - w] || dark[i + w];
+        if (!on) continue;
+        if (a < 0 || x - last > GAP + 1) { close(); a = x; thin = 0 }
+        if (dark[i] && vrun[i] <= T || dark[i - w] && vrun[i - w] <= T || dark[i + w] && vrun[i + w] <= T) thin++;
+        last = x;
+      }
+      close();
+    }
+    for (let x = 1; x < w - 1; x++) {
+      let a = -1, last = -1, thin = 0;
+      const close = () => {
+        if (a >= 0 && last - a + 1 >= LV && thin >= (last - a + 1) * 0.7)
+          for (let q = a; q <= last; q++) for (const xx of [x - 1, x, x + 1]) { const i = q * w + xx; if (dark[i] && (hrun[i] <= T || vrun[i] <= T)) line[i] = 1 }
+      };
+      for (let y = 0; y < h; y++) {
+        const i = y * w + x, on = dark[i] || dark[i - 1] || dark[i + 1];
+        if (!on) continue;
+        if (a < 0 || y - last > GAP + 1) { close(); a = y; thin = 0 }
+        if (dark[i] && hrun[i] <= T || dark[i - 1] && hrun[i - 1] <= T || dark[i + 1] && hrun[i + 1] <= T) thin++;
+        last = y;
+      }
+      close();
+    }
+    // dotted / dashed leader lines ("Haemoglobin ........ 150.00"): chains of small marks with nothing between them
+    const lab = new Int32Array(w * h).fill(-1), comps = [];
+    for (let i = 0; i < w * h; i++) {
+      if (!dark[i] || lab[i] !== -1 || line[i]) continue;
+      const id = comps.length, st = [i]; lab[i] = id; let x0 = w, x1 = 0, y0 = h, y1 = 0;
+      while (st.length) { const p = st.pop(), x = p % w, y = (p / w) | 0; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; for (const q of [x > 0 ? p - 1 : -1, x < w - 1 ? p + 1 : -1, y > 0 ? p - w : -1, y < h - 1 ? p + w : -1]) if (q >= 0 && dark[q] && !line[q] && lab[q] === -1) { lab[q] = id; st.push(q) } }
+      comps.push({ x0, x1, y0, y1 });
+    }
+    const dotH = Math.max(4, Math.round(Math.max(w, h) / 300)), dotW = Math.max(10, Math.round(Math.max(w, h) / 90)), gapMax = Math.max(24, Math.round(Math.max(w, h) / 40));
+    const isDot = new Uint8Array(comps.length), dots = [];
+    comps.forEach((c, id) => { const ch = c.y1 - c.y0 + 1, cw = c.x1 - c.x0 + 1; if (ch <= dotH && (cw <= dotW || ch <= dotH - 1 && cw <= dotW * 4)) { isDot[id] = 1; dots.push({ id, x0: c.x0, x1: c.x1, cy: (c.y0 + c.y1) / 2 }) } });
+    const clear = (xa, xb, cy) => { const ya = Math.max(0, Math.round(cy - dotH - 4)), yb = Math.min(h - 1, Math.round(cy + dotH + 4)); for (let y = ya; y <= yb; y++) for (let x = Math.max(0, xa); x <= Math.min(w - 1, xb); x++) { const i = y * w + x; if (dark[i] && !line[i] && !(lab[i] >= 0 && isDot[lab[i]])) return false } return true };
+    dots.sort((p, q) => p.x0 - q.x0);
+    const chains = [];
+    for (const d of dots) { const ch = chains.find(c => Math.abs(c.cy - d.cy) <= 2.5 && d.x0 > c.last && d.x0 - c.last <= gapMax && clear(c.last + 1, d.x0 - 1, (c.cy + d.cy) / 2)); if (ch) { ch.ids.push(d.id); ch.last = d.x1; ch.cy = (ch.cy * 3 + d.cy) / 4 } else chains.push({ cy: d.cy, last: d.x1, first: d.x0, ids: [d.id] }) }
+    const kill = new Uint8Array(comps.length);
+    for (const c of chains) if (c.ids.length >= 5 && c.last - c.first >= 60) for (const id of c.ids) kill[id] = 1;
+    for (let i = 0; i < w * h; i++) if (lab[i] >= 0 && kill[lab[i]]) line[i] = 1;
+    const out = ctx.createImageData(w, h), od = out.data;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const i = y * w + x;
+      const v = line[i] || (x > 0 && line[i - 1]) || (x < w - 1 && line[i + 1]) || (y > 0 && line[i - w]) || (y < h - 1 && line[i + w]) ? 255 : n[i];
+      const o = i * 4; od[o] = od[o + 1] = od[o + 2] = v; od[o + 3] = 255;
+    }
+    ctx.putImageData(out, 0, 0);
+    return c;
+  }
+  // a turned, resized JPEG of the photo: for the AI reader (big, sharp) and for keeping with the bill (smaller)
+  function jpeg(img, rot = 0, max = 1600, quality = 0.72) {
+    const w0 = img.naturalWidth || img.width, h0 = img.naturalHeight || img.height, s = Math.min(1, max / Math.max(w0, h0));
+    const sw0 = Math.round(w0 * s), sh0 = Math.round(h0 * s), turn = ((rot % 4) + 4) % 4, w = turn % 2 ? sh0 : sw0, h = turn % 2 ? sw0 : sh0;
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); ctx.imageSmoothingQuality = 'high';
+    ctx.translate(w / 2, h / 2); ctx.rotate(turn * Math.PI / 2); ctx.drawImage(img, -sw0 / 2, -sh0 / 2, sw0, sh0);
+    return new Promise((res, rej) => c.toBlob(b => b ? res(b) : rej(new Error('This photo could not be prepared.')), 'image/jpeg', quality));
+  }
+  return { prepare, jpeg, sideways };
+})();
+</script>
+<script>
+/* ===================== settings ===================== */
+const CFG={
+  HOSPITAL_NAME:"RxPx Hospitals",
+  CURRENCY:"₹",
+  EXPIRY_WARNING_DAYS:7,
+  LOW_STOCK_LIMIT:10,
+  // Your Google Sheet is the app's server: accounts, bills, stock, photos and the AI bill reader
+  // (google-sheet/Code.gs, see SETUP.md). Paste its web app address here (it ends with /exec).
+  // Leave it empty to try the app with bills kept only in this browser and the basic offline reader.
+  SHEET_URL:"",
+  SHEET_LINK:"https://docs.google.com/spreadsheets/d/1AiuoslceNFX7koot7MA3mBIeVWZWbZydE8iSBC2S2ds/edit",
+};
+// the distinctive word of the hospital name, used to tell bills the hospital issued (sales) from bills it received (purchases)
+CFG.HOSPITAL_KEY=CFG.HOSPITAL_NAME.toLowerCase().replace(/[^a-z ]/g,' ').split(/\s+/).filter(w=>w.length>=3&&!/^(hospitals?|clinic|sri|shri|sree|the|and|medical|care|centre|center|multi|speciality|specialty|super|nursing|home|health|healthcare|institute|of)$/.test(w)).sort((a,b)=>b.length-a.length)[0]||'';
+const ONLINE=!!CFG.SHEET_URL;
+
+const TYPES={
+medicine_purchase:{t:"Medicine Purchase Bill",s:"Medicine purchases",q:"Medicines bought from a supplier",i:"package-plus",party:"Supplier",ref:"Supplier GSTIN",med:1,money:'expense'},
+pharmacy_sales:{t:"Pharmacy Sales Bill",s:"Pharmacy sales",q:"Medicines sold to a patient",i:"pill",party:"Patient",ref:"Patient ID",med:1,money:'revenue'},
+patient:{t:"Patient Bill",s:"Patient bills",q:"Hospital charges for a patient (room, doctor, nursing)",i:"stethoscope",party:"Patient",ref:"Patient ID",money:'revenue'},
+lab:{t:"Lab and Diagnostics Bill",s:"Lab bills",q:"Lab test or scan bill",i:"flask-conical",party:"Patient",ref:"Patient ID",money:'revenue'},
+expense:{t:"Other Expense Bill",s:"Other expenses",q:"Other expense (electricity, repairs, supplies)",i:"receipt",party:"Vendor",ref:"Vendor GSTIN",money:'expense'}};
+const TKEYS=Object.keys(TYPES),EXP_T=['medicine_purchase','expense'],REV_T=['pharmacy_sales','patient','lab'],OUT_T=EXP_T,IN_T=REV_T;
+const READ_BY={ai:'AI reader',basic:'Basic reader',spreadsheet:'Spreadsheet',typed:'Typed by hand','old version':'Old version'};
+
+const S={user:null,session:'',server:null,view:'boot',auth:{mode:'in',name:'',email:'',pw:'',pw2:'',code:''},showPw:0,msg:'',info:'',busy:0,
+names:[],bills:[],meds:[],loadErr:'',f:{bq:'',mq:''},mf:'all',rep:'all',
+flow:'choose',flowName:'',flowNameId:'',selectedName:'',type:'',up:null,draft:null,dup:null,forced:false,retrySave:false,pendingId:null,run:0,step:0,bad:0,ocrMessage:'',
+edit:null,detail:null,ask:0,sheet:0,mform:{name:'',batch:'',qty:'',manufacture_date:'',expiry:'',supplier:''},img:{},charts:[],last:null,sheetBusy:0};
+
+/* ===================== small helpers ===================== */
+const $=s=>document.querySelector(s),touch=matchMedia('(pointer:coarse)').matches;
+const ic=(n,c='')=>`<i data-lucide="${n}" class="${c}"></i>`;
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmtN=n=>new Intl.NumberFormat('en-IN',{maximumFractionDigits:2}).format(Math.abs(+n||0));
+const inr=n=>(+n<0?'−':'')+CFG.CURRENCY+fmtN(n);
+const okDate=d=>/^\d{4}-\d{2}-\d{2}$/.test(d||'')&&!Number.isNaN(new Date(d+'T00:00').valueOf());
+const fd=d=>okDate(d)?new Date(d+'T00:00').toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}):'Not set';
+const fdt=iso=>{const d=new Date(iso);return !iso||Number.isNaN(d.valueOf())?'':d.toLocaleString('en-IN',{day:'2-digit',month:'short',year:'numeric',hour:'numeric',minute:'2-digit',hour12:true})};
+const uid=()=>{if(crypto.randomUUID)return crypto.randomUUID();const b=crypto.getRandomValues(new Uint8Array(16));b[6]=b[6]&15|64;b[8]=b[8]&63|128;const h=[...b].map(x=>x.toString(16).padStart(2,'0')).join('');return`${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`};
+const isUuid=s=>/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s||'');
+const lc=s=>String(s||'').trim().toLowerCase().replace(/\s+/g,' ');
+const r2=v=>Math.round((+v+Number.EPSILON)*100)/100,r3=v=>Math.round((+v+Number.EPSILON)*1000)/1000;
+const num=v=>{const m=BillParser.money(v);return m?m.v:''};
+const str=v=>v===''||v==null?'':String(v);
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const isoDay=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const ymOf=d=>isoDay(d).slice(0,7);
+const day0=()=>{const d=new Date();d.setHours(0,0,0,0);return d};
+const st=m=>{if(!okDate(m.expiry))return'good';const d=Math.round((new Date(m.expiry+'T00:00')-day0())/864e5);return d<0?'exp':d<=CFG.EXPIRY_WARNING_DAYS?'soon':'good'};
+const BL={good:'Good',soon:'Expiring soon',exp:'Expired'};
+const fmtQty=m=>{const q=+m.qty||0;if(Math.abs(q-Math.round(q))<0.001)return String(Math.round(q));const p=+m.pack_n||0;if(p>1){const w=Math.floor(q+1e-6),l=Math.round((q-w)*p);return l?`${w} + ${l} loose`:String(w)}return q.toFixed(2)};
+const badge=m=>`<span class="b ${st(m)}">${BL[st(m)]}</span>`+((+m.qty||0)<=0?' <span class="b exp">Out of stock</span>':(+m.qty<=CFG.LOW_STOCK_LIMIT?' <span class="b low">Low stock</span>':''));
+const byExp=(a,b)=>(a.expiry||'9999')<(b.expiry||'9999')?-1:(a.expiry||'9999')>(b.expiry||'9999')?1:0;
+const byCreated=(a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||''));
+const byDate=(a,b)=>String(b.bill_date||b.created_at||'').localeCompare(String(a.bill_date||a.created_at||''))||byCreated(a,b);
+const billMonth=b=>okDate(b.bill_date)?b.bill_date.slice(0,7):(b.created_at?ymOf(new Date(b.created_at)):'');
+const monthName=k=>k?new Date(k+'-01T00:00').toLocaleDateString('en-IN',{month:'long',year:'numeric'}):'';
+const sumOf=(list,types)=>r2(list.filter(b=>!types||types.includes(b.type)).reduce((s,b)=>s+(+b.total||0),0));
+const moneyOf=list=>{const i=sumOf(list,IN_T),o=sumOf(list,OUT_T);return{in:i,out:o,bal:r2(i-o)}};
+const nameOf=b=>(S.names.find(n=>n.id==b.name_id)||{}).name||'No name';
+const thisMonth=()=>ymOf(new Date());
+const typeLabel=t=>TYPES[t]?.t||'Unclassified bill';
+const billAmount=d=>{const t=num(d.total_amount);if(t!=='')return t;const sub=d.items.reduce((s,i)=>s+(+i.amount||0),0);return r2(sub+(+d.tax_amount||0)-Math.abs(+d.discount_amount||0))};
+// every bill name with its bills (used by the Excel download)
+function nameStats(){return S.names.map(n=>{const l=S.bills.filter(b=>b.name_id==n.id),last=l.reduce((a,b)=>!a||String(b.created_at)>String(a.created_at)?b:a,null);return{...n,count:l.length,last,m:moneyOf(l)}}).filter(x=>x.count).sort((a,b)=>String(b.last?.created_at||'').localeCompare(String(a.last?.created_at||'')))}
+const usualType=name=>{const n=S.names.find(x=>lc(x.name)==lc(name));if(!n)return'';const c={};for(const b of S.bills)if(b.name_id==n.id&&TYPES[b.type])c[b.type]=(c[b.type]||0)+1;return Object.keys(c).sort((a,b)=>c[b]-c[a])[0]||(TYPES[n.type]?n.type:'')};
+const toast=t=>{const e=$('#toast');e.innerHTML=ic('check')+esc(t);window.lucide&&lucide.createIcons();e.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>e.classList.remove('show'),3600)};
+function withTimeout(promise,ms,message,onTimeout){let timer;return Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>{onTimeout&&onTimeout();reject(new Error(message))},ms)})]).finally(()=>clearTimeout(timer))}
+const b64=blob=>new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(String(r.result).split(',')[1]||'');r.onerror=()=>rej(new Error('The file could not be read.'));r.readAsDataURL(blob)});
+const LS={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch{return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true}catch{return false}},del(k){try{localStorage.removeItem(k)}catch{}}};
+
+/* original bill photos / PDFs kept on this device (offline mode) */
+const IDB={db:null,open(){return this.db||(this.db=new Promise((res,rej)=>{if(!window.indexedDB)return rej(new Error('no storage'));const r=indexedDB.open('rxpx-files-v2',1);r.onupgradeneeded=()=>r.result.createObjectStore('files');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)}))},
+async put(k,v){const db=await this.open();return new Promise((res,rej)=>{const t=db.transaction('files','readwrite');t.objectStore('files').put(v,k);t.oncomplete=()=>res(true);t.onerror=()=>rej(t.error)})},
+async get(k){const db=await this.open();return new Promise((res,rej)=>{const q=db.transaction('files').objectStore('files').get(k);q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error)})},
+async del(k){const db=await this.open();return new Promise(res=>{const t=db.transaction('files','readwrite');t.objectStore('files').delete(k);t.oncomplete=()=>res(true);t.onerror=()=>res(false)})}};
+
+/* ===================== sign in ===================== */
+const USERS_KEY='rxpx-v2:users',SESSION_KEY='rxpx-v2:session',DATA_KEY=id=>'rxpx-v2:data:'+id,FLOW_KEY='rxpx-v2:flow',LEGACY_KEY='hospital-bills-preview-v1',SS_KEY='rxpx-v3:session',LAST_KEY=id=>'rxpx-v2:last:'+id;
+// the "Last bill saved" card stays after a reload, per account
+const setLast=L=>{S.last=L;if(S.user)LS.set(LAST_KEY(S.user.id),L)};
+async function pwHash(pw,salt){if(!crypto.subtle)throw new Error('Open the app over https:// to sign in securely.');const key=await crypto.subtle.importKey('raw',new TextEncoder().encode(pw),'PBKDF2',false,['deriveBits']);const bits=await crypto.subtle.deriveBits({name:'PBKDF2',salt:new TextEncoder().encode(salt),iterations:150000,hash:'SHA-256'},key,256);return[...new Uint8Array(bits)].map(b=>b.toString(16).padStart(2,'0')).join('')}
+// the script in the Google Sheet is the server; every request carries this account's sign-in
+async function api(action,data={},ms=90000){let r;
+try{r=await withTimeout(fetch(CFG.SHEET_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action,session:S.session||'',...data})}),ms,'The Google Sheet did not answer in time. Try again.')}
+catch(e){throw new Error(/in time/.test(e.message)?e.message:'No internet connection. Check your connection and try again.')}
+let j=null;try{j=await r.json()}catch{}
+if(!j)throw new Error('The Google Sheet did not answer properly. Check that its script is deployed as a web app with access "Anyone" (see SETUP.md).');
+if(!j.ok){if(j.code=='session'&&S.user)setTimeout(sessionExpired);throw new Error(j.error||'Something went wrong. Try again.')}
+return j}
+function sessionExpired(){LS.del(SS_KEY);S.session='';resetSession();S.auth={mode:'in',name:'',email:'',pw:'',pw2:'',code:''};S.view='login';S.msg='Please sign in again.';render()}
+const SheetAuth={
+  async restore(){const s=LS.get(SS_KEY,null);if(!s||!s.token)return null;S.session=s.token;try{return(await api('me')).user}catch(e){if(/sign in again/i.test(e.message)){LS.del(SS_KEY);S.session='';return null}return s.user||null}},
+  async signIn(email,pw){const j=await api('signin',{email,password:pw});S.session=j.session;LS.set(SS_KEY,{token:j.session,user:j.user});return j.user},
+  async signUp(name,email,pw,code){const j=await api('signup',{name,email,password:pw,code});S.session=j.session;LS.set(SS_KEY,{token:j.session,user:j.user});return{user:j.user}},
+  async signOut(){try{await api('signout')}catch{}LS.del(SS_KEY);S.session=''}
+};
+// without a Google Sheet, accounts live in this browser only
+const LocalAuth={
+  async restore(){const id=LS.get(SESSION_KEY,null);const u=Object.values(LS.get(USERS_KEY,{})).find(x=>x.id==id);return u?{id:u.id,name:u.name,email:u.email}:null},
+  async signIn(email,pw){const u=LS.get(USERS_KEY,{})[email];if(!u||await pwHash(pw,u.salt)!==u.hash)throw new Error('Email or password is wrong.');LS.set(SESSION_KEY,u.id);return{id:u.id,name:u.name,email:u.email}},
+  async signUp(name,email,pw){const users=LS.get(USERS_KEY,{});if(users[email])throw new Error('An account with this email already exists. Sign in instead.');const salt=uid(),u={id:uid(),name,email,salt,hash:await pwHash(pw,salt),created_at:new Date().toISOString()};users[email]=u;if(!LS.set(USERS_KEY,users))throw new Error('This browser could not save the account.');LS.set(SESSION_KEY,u.id);return{user:{id:u.id,name,email}}},
+  async signOut(){LS.del(SESSION_KEY)}
+};
+const Auth=ONLINE?SheetAuth:LocalAuth;
+
+/* ===================== saving: this browser, or the Google Sheet ===================== */
+function mergeMeds(list,meds,drop=[]){const out=list.filter(m=>!drop.includes(m.id));for(const m of meds){const j=out.findIndex(x=>x.id==m.id);if(j>=0)out[j]={...m};else out.push({...m})}return out}
+function mergeSave(st,p){const names=st.names.slice();let j=names.findIndex(x=>x.id==p.name.id);if(j<0)j=names.findIndex(x=>lc(x.name)==lc(p.name.name));let nm;
+  if(j>=0){nm={...names[j],type:names[j].type||p.name.type||''};names[j]=nm}else{nm={id:p.name.id,name:String(p.name.name).trim(),type:p.name.type||'',created_at:new Date().toISOString()};names.push(nm)}
+  const b={...p.bill,name_id:nm.id},bills=st.bills.slice(),k=bills.findIndex(x=>x.id==b.id);if(k>=0)bills[k]=b;else bills.unshift(b);
+  return{names,bills,meds:mergeMeds(st.meds,p.meds||[],p.drop||[]),name_id:nm.id}}
+function mergeDelete(st,bill,meds,drop){const bills=st.bills.filter(b=>b.id!=bill.id);return{names:st.names.filter(n=>n.id!=bill.name_id||bills.some(b=>b.name_id==n.id)),bills,meds:mergeMeds(st.meds,meds||[],drop||[])}}
+
+const LocalStore={
+  async load(u){const d=LS.get(DATA_KEY(u.id),null)||{};return{names:d.names||[],bills:d.bills||[],meds:d.meds||[]}},
+  write(u,next){if(!LS.set(DATA_KEY(u.id),{names:next.names,bills:next.bills,meds:next.meds}))throw new Error('This browser has no space left for bills. Connect the Google Sheet (see SETUP.md) or delete old bills.')},
+  async saveBill(u,p){let file=p.bill.file;const added=[];
+    if(p.files?.length){try{for(const[i,f]of p.files.entries()){const k=`${u.id}/${p.bill.id}/${i}`;await IDB.put(k,f.blob);added.push(k)}file={...file,keys:added,types:p.files.map(f=>f.type),stored:true}}catch{file={...file,stored:false}}}
+    const next=mergeSave(S,{...p,bill:{...p.bill,file}});
+    try{this.write(u,next)}catch(e){for(const k of added)IDB.del(k).catch(()=>{});throw e}
+    return{name_id:next.name_id,file}},
+  async deleteBill(u,bill,meds,drop){this.write(u,mergeDelete(S,bill,meds,drop));for(const k of bill.file?.keys||[])IDB.del(k).catch(()=>{})},
+  async saveMeds(u,meds){this.write(u,{names:S.names,bills:S.bills,meds:mergeMeds(S.meds,meds)})},
+  async importAll(u,names,bills,meds){const next={names:S.names.slice(),bills:S.bills.slice(),meds:mergeMeds(S.meds,meds)};for(const b of bills){const nm=names.find(n=>n.id==b.name_id);const m=mergeSave(next,{name:nm,bill:b,meds:[]});next.names=m.names;next.bills=m.bills}this.write(u,next);return bills.length},
+  async fileUrls(u,b){const out=[];for(const[i,k]of(b.file?.keys||[]).entries()){try{const blob=await IDB.get(k);if(blob)out.push({url:URL.createObjectURL(blob),type:blob.type||b.file.types?.[i]||''})}catch{}}return out}
+};
+const b64ToBlob=(d,t)=>{const s=atob(d),a=new Uint8Array(s.length);for(let i=0;i<s.length;i++)a[i]=s.charCodeAt(i);return new Blob([a],{type:t||'application/octet-stream'})};
+const SheetStore={
+  async load(){const j=await api('load');return{names:j.names||[],
+    bills:(j.bills||[]).map(b=>({...b,bill_date:b.bill_date||'',items:Array.isArray(b.items)?b.items:[],warnings:Array.isArray(b.warnings)?b.warnings:[],stock_movements:Array.isArray(b.stock_movements)?b.stock_movements:[]})),
+    meds:(j.meds||[]).map(m=>({...m,qty:+m.qty||0}))}},
+  async saveBill(u,p){const files=[];for(const f of p.files||[])files.push({data:await b64(f.blob),type:f.type,ext:f.ext});
+    const j=await api('save',{name:p.name,bill:p.bill,meds:p.meds||[],drop:p.drop||[],files,sheet:sheetRows(p.bill,p.name.name)},240000);
+    return{name_id:j.name_id,file:j.file,photoError:j.photoError||''}},
+  async deleteBill(u,bill,meds,drop){await api('delete',{id:bill.id,meds:meds||[],drop:drop||[]})},
+  async saveMeds(u,meds){await api('meds',{meds})},
+  async importAll(u,names,bills,meds){const j=await api('import',{names,bills,meds,sheet:bills.map(b=>({id:b.id,...sheetRows(b,(names.find(n=>n.id==b.name_id)||{}).name||'')}))},300000);return j.count},
+  async fileUrls(u,b){if(!b.file?.stored)return[];const j=await api('photo',{id:b.id},120000);return(j.files||[]).map(f=>({url:URL.createObjectURL(b64ToBlob(f.data,f.type)),type:f.type}))}
+};
+const Store=ONLINE?SheetStore:LocalStore;
+
+async function loadData(){S.loadErr='';try{const d=await Store.load(S.user);S.names=d.names;S.bills=d.bills.sort(byCreated);S.meds=d.meds;S.meds.forEach(keyOf);const L=LS.get(LAST_KEY(S.user.id),null);S.last=L&&S.bills.some(b=>b.id==L.id)?L:null}catch(e){S.loadErr=e.message||'Your bills could not be loaded.'}}
+function resetSession(){S.user=null;S.names=[];S.bills=[];S.meds=[];S.last=null;S.edit=null;S.detail=null;S.loadErr='';S.flow='choose';S.flowName='';S.flowNameId='';S.selectedName='';S.draft=null;S.dup=null;clearUp();for(const l of Object.values(S.img))for(const f of l||[])if(f.url.startsWith('blob:'))URL.revokeObjectURL(f.url);S.img={};try{sessionStorage.removeItem(FLOW_KEY)}catch{}}
+
+/* ===================== medicine stock ===================== */
+const FORMS=[[/\bTABLETS?\b|\bTABS?\b/g,'TAB'],[/\bCAPSULES?\b|\bCAPS\b/g,'CAP'],[/\bINJECTIONS?\b/g,'INJ'],[/\bSYRUP\b|\bSYR\b/g,'SYP'],[/\bSUSPENSION\b/g,'SUSP'],[/\bOINTMENT\b/g,'OINT'],[/\bDROPS\b/g,'DROP']];
+function medKey(n){let s=' '+String(n||'').toUpperCase().replace(/[^A-Z0-9.]+/g,' ')+' ';for(const[r,v]of FORMS)s=s.replace(r,v);return s.replace(/\b\d+\s*'?S\b|\b\d+\s*X\s*\d+\b|\bSTRIPS?\b|\bPACK\b|\b\d+(?:\.\d+)?\s*(?:ML|L|LTR)\b/g,' ').replace(/\s+/g,' ').trim()}
+function sameMed(a,b){if(!a||!b)return false;if(a===b)return true;const na=(a.match(/\d+(?:\.\d+)?/g)||[]).join(','),nb=(b.match(/\d+(?:\.\d+)?/g)||[]).join(',');if(na!==nb)return false;const la=a.replace(/[^A-Z]/g,''),lb=b.replace(/[^A-Z]/g,'');if(la.length<3||lb.length<3)return false;return 1-BillParser.lev(la,lb)/Math.max(la.length,lb.length)>=0.8}
+const keyOf=m=>m.key||(m.key=medKey(m.name));
+const normBatch=s=>String(s||'').toUpperCase().replace(/[^A-Z0-9\-\/]/g,'');
+function packsSold(it,lots){const q=+it.quantity||0;if(!q)return 0;const lotPack=+(lots.find(l=>+l.pack_n>0)||{}).pack_n||0,pn=+it.pack_n||lotPack;if(pn===1)return q;
+const m=+it.mrp||+(lots.find(l=>+l.mrp>0)||{}).mrp||0,a=+it.amount||0;
+if(m&&a){const ratio=q*m/a;if(pn>1&&Math.abs(ratio-pn)/pn<=0.25)return q/pn;if(ratio>=1.5&&ratio<=100&&Math.abs(ratio-Math.round(ratio))<0.06)return q/Math.round(ratio)}
+return q}
+// adds (purchase) or takes away (sale) stock in `meds`; returns what moved
+function applyStock(b,meds){const effect={added:0,removed:0,shortage:[],movements:[]};if(!TYPES[b.type]?.med)return effect;
+const sup=b._name||nameOf(b);
+for(const i of b.items){const n=String(i.description||'').trim(),k=medKey(n),bt=normBatch(i.batch_no);if(!n||!k)continue;
+if(b.type=='medicine_purchase'){const units=r3((+i.quantity||0)+(+i.free||0));if(units<=0)continue;let m=meds.find(x=>sameMed(keyOf(x),k)&&normBatch(x.batch)==bt);
+if(m){m.qty=r3((+m.qty||0)+units);m.expiry=okDate(i.expiry_date)?i.expiry_date:m.expiry;m.manufacture_date=okDate(i.manufacture_date)?i.manufacture_date:m.manufacture_date;m.supplier=sup||m.supplier;if(+i.pack_n)m.pack_n=+i.pack_n;if(+i.mrp)m.mrp=+i.mrp;if(+i.rate)m.rate=+i.rate}
+else{m={id:uid(),name:n,key:k,batch:bt,qty:units,pack_n:+i.pack_n||'',mrp:+i.mrp||'',rate:+i.rate||'',manufacture_date:okDate(i.manufacture_date)?i.manufacture_date:'',expiry:okDate(i.expiry_date)?i.expiry_date:'',supplier:sup};meds.push(m)}
+effect.added=r3(effect.added+units);effect.movements.push({direction:'in',lot:m.id,name:m.name,batch:m.batch,quantity:units,manufacture_date:m.manufacture_date,expiry:m.expiry})}
+else{const lots=meds.filter(x=>sameMed(keyOf(x),k)),rank=x=>{const xb=normBatch(x.batch);return !bt||!xb?2:xb==bt?0:BillParser.lev(xb,bt)<=1?1:2},avail=lots.filter(x=>(+x.qty||0)>0).sort((x,y)=>rank(x)-rank(y)||byExp(x,y));
+let left=r3(packsSold(i,lots));if(left<=0)continue;
+for(const m of avail){if(left<=0)break;const moved=r3(Math.min(+m.qty,left));if(moved<=0)continue;m.qty=r3(m.qty-moved);left=r3(left-moved);effect.removed=r3(effect.removed+moved);effect.movements.push({direction:'out',lot:m.id,name:m.name,batch:m.batch,quantity:moved,manufacture_date:m.manufacture_date||'',expiry:m.expiry||''})}
+if(left>0.0005)effect.shortage.push({name:n,quantity:left})}}
+return effect}
+// undoes a saved bill's stock movements in `meds`; returns a message when that is not safe.
+// strict=false (editing): the edited bill is applied right after, and only the final stock has to stay at or above zero
+function reverseStock(b,meds,strict=true){if(!TYPES[b.type]?.med)return'';if(!Array.isArray(b.stock_movements))return'This bill has no saved stock history, so it cannot be changed safely.';
+for(const m of b.stock_movements){const lot=meds.find(x=>x.id&&x.id===m.lot)||meds.find(x=>sameMed(keyOf(x),medKey(m.name))&&normBatch(x.batch)==normBatch(m.batch));
+if(m.direction=='in'){if(!lot){if(strict)return`Cannot take back ${m.quantity} of ${m.name}: that stock is no longer listed.`;continue}if(strict&&(+lot.qty||0)<m.quantity-0.0005)return`Cannot take back ${m.quantity} of ${m.name}: some of that stock has already been sold. Delete or change that sale bill first.`;lot.qty=r3((+lot.qty||0)-m.quantity)}
+else if(m.direction=='out'){if(lot)lot.qty=r3((+lot.qty||0)+m.quantity);else meds.push({id:uid(),name:m.name,key:medKey(m.name),batch:m.batch||'',qty:m.quantity,pack_n:'',mrp:'',rate:'',manufacture_date:m.manufacture_date||'',expiry:m.expiry||'',supplier:''})}}return''}
+const changedMeds=(meds,drop=[])=>meds.filter(m=>!drop.includes(m.id)&&JSON.stringify(S.meds.find(x=>x.id==m.id))!==JSON.stringify(m));
+// stock rows an earlier version of this bill created that are empty now and used by no other bill: removed, so no phantom medicines stay behind
+const emptyLots=(old,meds,keep=[])=>[...new Set((old.stock_movements||[]).filter(m=>m.direction=='in').map(m=>m.lot))].filter(id=>{const lot=meds.find(x=>x.id==id);return lot&&Math.abs(+lot.qty||0)<0.0005&&!keep.some(m=>m.lot==id)&&!S.bills.some(o=>o.id!=old.id&&(o.stock_movements||[]).some(m=>m.lot==id))});
+function impactOf(b,mv){const T=TYPES[b.type],parts=[`${T?(T.money=='expense'?'Added to expenses':'Added to revenue'):'Saved (no type)'}: ${inr(b.total)}${billMonth(b)!=ymOf(new Date())?` (counted in ${monthName(billMonth(b))}, the bill date)`:''}`];if(mv.added)parts.push(`Stock added: ${+mv.added.toFixed(2)} units of ${new Set(mv.movements.map(m=>m.lot)).size} medicines`);if(mv.removed)parts.push(`Stock reduced: ${+mv.removed.toFixed(2)} packs`);return parts.join(' · ')}
+function shortageOf(b,mv){return mv.shortage.length?mv.shortage.map(x=>`${x.name}: ${+x.quantity.toFixed(2)} was not in stock`).join('; '):TYPES[b.type]?.med&&!mv.added&&!mv.removed?'No medicine quantities were found, so stock was not changed.':''}
+
+/* ===================== checks shown to the user ===================== */
+const WARN_TEXT={no_date:'The bill date is missing.',no_number:'The bill number is missing.',total_calculated:'The total was not clearly printed, so it was added up from the items.',sum_mismatch:'The items do not add up to the bill total.',items_missing:'Some items on the bill may not have been read.',date_odd:'The bill date looks wrong (in the future or very old).',no_expiry:'{n} medicine(s) have no expiry date.',no_qty:'{n} item(s) have no quantity.',not_read:'Some values could not be read clearly: {n}.',unclear_items:'{n} item(s) were hard to read.'};
+const FIELD_TEXT={bill_date:'bill date',bill_number:'bill number',total_amount:'total',tax_amount:'tax',discount_amount:'discount',subtotal:'sub-total',items:'items',payment_mode:'payment',seller_name:'seller name',patient_name:'patient name',patient_id:'patient ID',seller_gstin:'GSTIN',round_off:'round off'};
+const warnText=w=>{const[k,...n]=String(w).split(':');return(WARN_TEXT[k]||'').replace('{n}',n.join(':'))};
+function checks(e){const items=(e.items||[]).filter(i=>String(i.description||'').trim()),sum=r2(items.reduce((s,i)=>s+(+num(i.amount)||0),0)),total=+num(e.total)||0,tax=+num(e.tax)||0,disc=Math.abs(+num(e.discount)||0),sub=+num(e.subtotal)||0;
+  let match=null;if(sum>0&&total>0)match=[sum,sum+tax,sum-disc,sum+tax-disc,sub,sub+tax,sub-disc,sub+tax-disc].some(x=>x>0&&Math.abs(x-total)<=Math.max(1.01,total*0.002));
+  return{items:items.length,sum,total,match}}
+function savedWarnings(b,match){const w=[];if(!b.bill_date)w.push('no_date');if(!b.bill_number)w.push('no_number');if(match===false)w.push('sum_mismatch');if(TYPES[b.type]?.med){const ne=b.items.filter(i=>!i.expiry_date).length;if(ne&&b.type=='medicine_purchase')w.push('no_expiry:'+ne);const nq=b.items.filter(i=>!(+i.quantity>0)).length;if(nq)w.push('no_qty:'+nq)}return w}
+function dateOdd(d){if(!okDate(d))return false;const t=new Date(d+'T00:00'),now=day0(),max=new Date(now);max.setDate(max.getDate()+3);const min=new Date(now);min.setFullYear(min.getFullYear()-3);return t>max||t<min}
+const normNo=s=>String(s||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+function findDuplicate(c){const no=normNo(c.bill_number),p=lc(c.name);
+  for(const b of S.bills){if(b.id==c.id)continue;
+    if(c.hash&&b.file_hash&&b.file_hash==c.hash)return{bill:b,why:'file'};
+    const bn=normNo(b.bill_number),bp=lc(nameOf(b)),sameTot=c.total>0&&Math.abs((+b.total||0)-c.total)<=1;
+    if(no.length>=2&&bn==no&&(bp==p||sameTot||(c.bill_date&&b.bill_date==c.bill_date)))return{bill:b,why:'number'};
+    if(!no&&c.bill_date&&b.bill_date==c.bill_date&&sameTot&&bp==p&&b.items.length==c.items)return{bill:b,why:'same'}}
+  return null}
+/* ===================== screens (the original RxPx design) ===================== */
+const SUN=(()=>{let s='<svg viewBox="0 0 60 46" aria-hidden="true"><circle cx="30" cy="34" r="6" fill="#F47B20"/>';[[13,2.6],[21,2.2],[29,1.7]].forEach(([r,z],k)=>{for(let a=-165;a<=-15;a+=25){const t=a*Math.PI/180;s+=`<circle cx="${(30+r*Math.cos(t)*1.05).toFixed(1)}" cy="${(34+r*Math.sin(t)).toFixed(1)}" r="${z}" fill="#F47B20" opacity="${(1-k*.28).toFixed(2)}"/>`}});return s+'</svg>'})();
+const logo=(big)=>`<span class="logo ${big?'big':''}" role="img" aria-label="${esc(CFG.HOSPITAL_NAME)}">${SUN}<span><span class="rx">R<i>x</i>P<i>x</i></span><span class="hs">HOSPITALS</span></span></span>`;
+const nav=[['home','house','Home'],['meds','pill','Medicines'],['new','plus','New bill'],['reports','table','Reports'],['profile','user','Profile']];
+const shell=(on,body)=>`<aside class="side">${logo()}${nav.filter(n=>n[0]!='new').map(n=>`<button class="sn ${on==n[0]?'on':''}" data-a="go" data-v="${n[0]}">${ic(n[1])}${n[2]}</button>`).join('')}<button class="btn pri" data-a="newbill">${ic('plus')}New bill</button></aside><div class="wrap"><main class="main stack"><div class="mtop mob">${logo()}</div>${body}</main></div><nav class="tabs">${nav.map(n=>n[0]=='new'?`<button class="tab add" data-a="newbill"><span class="pl">${ic('plus')}</span>New bill</button>`:`<button class="tab ${on==n[0]?'on':''}" data-a="go" data-v="${n[0]}">${ic(n[1])}${n[2]}</button>`).join('')}</nav>`;
+const steps=n=>`<div class="mu sm">Step ${n} of 3</div><div class="steps">${[1,2,3].map(i=>`<i class="${i<=n?'on':''}"></i>`).join('')}</div>`;
+const billRow=b=>`<button class="row" data-a="open" data-id="${b.id}"><div><b>${esc(nameOf(b))}</b><span class="mu sm">${esc(TYPES[b.type]?.s||'Unclassified')}${b.bill_number?' · '+esc(b.bill_number):''}</span></div><div class="r"><b class="num">${inr(b.total)}</b><span class="mu sm">${fd(b.bill_date)}</span></div></button>`;
+const errP=()=>S.msg?`<p class="err">${esc(S.msg)}</p>`:'';
+// while the Google Sheet saves, a button shows a small spinner
+const busyLabel=t=>S.busy?`<span class="spin"></span>Please wait...`:t;
+const loadErrCard=()=>S.loadErr?`<div class="warn">${ic('triangle-alert')}<div><b>Your bills could not be loaded.</b> ${esc(S.loadErr)}<div style="margin-top:8px"><button class="btn" style="width:auto;min-height:44px" data-a="retryLoad">${ic('refresh-cw')}Try again</button></div></div></div>`:'';
+
+function boot(){return `<div class="flow" style="padding-top:96px;text-align:center"><div style="display:flex;justify-content:center">${logo(1)}</div><p class="mu" style="margin-top:24px"><span class="spin" style="margin-right:8px"></span>Loading...</p></div>`}
+
+function login(){const a=S.auth,su=a.mode=='up',needCode=su&&ONLINE&&S.server&&S.server.signupCode;
+return `<div class="flow stack in" style="padding-top:32px;text-align:center"><div style="display:flex;justify-content:center;padding-bottom:8px">${logo(1)}</div><h1>${su?'Create your account':'Welcome back'}</h1>
+<div class="seg"><button class="${su?'':'on'}" data-a="mode" data-m="in">Sign in</button><button class="${su?'on':''}" data-a="mode" data-m="up">Create account</button></div>
+<form class="stack" style="text-align:left" data-f="auth" novalidate>${su?`<label class="fl">Full name<input class="inp" data-k="auth.name" value="${esc(a.name)}" autocomplete="name"></label>`:''}
+<label class="fl">Email<input class="inp" type="email" data-k="auth.email" value="${esc(a.email)}" autocomplete="email" inputmode="email"></label>
+<label class="fl">Password<div style="display:flex;gap:8px;margin-top:4px"><input class="inp" id="pw" type="${S.showPw?'text':'password'}" data-k="auth.pw" value="${esc(a.pw)}" autocomplete="${su?'new-password':'current-password'}"><button type="button" class="btn" style="width:auto;min-height:48px" data-a="eye">${ic(S.showPw?'eye-off':'eye')}${S.showPw?'Hide':'Show'}</button></div></label>
+${su?`<label class="fl">Confirm password<input class="inp" type="password" data-k="auth.pw2" value="${esc(a.pw2)}" autocomplete="new-password"></label>`:''}
+${needCode?`<label class="fl">Hospital code<input class="inp" data-k="auth.code" value="${esc(a.code)}" autocomplete="off"></label>`:''}
+${errP()}
+<button class="btn pri" type="submit" ${S.busy?'disabled':''}>${busyLabel(su?'Create account':'Sign in')}</button></form>
+<p class="note">${ONLINE?`Bills and stock are saved in the hospital’s Google Sheet. Each account sees only its own bills.${su?'':' Forgot your password? Ask your admin to reset it.'}`:'Bills and stock are saved in this browser. They do not sync to other devices.'}</p></div>`}
+
+function lastCard(){const L=S.last;if(!L)return'';const b=S.bills.find(x=>x.id==L.id);const ws=(b?.warnings||[]).map(warnText).filter(Boolean);
+return `<section class="card stack lastcard"><div class="sp"><b>${ic('circle-check-big','okc')} Last bill saved</b><span class="mu sm">${esc(typeLabel(b?.type))}</span></div><span>${esc(L.impact)}</span>${L.shortage?`<div class="err" style="margin:0">${esc(L.shortage)}</div>`:''}${L.note?`<div class="err" style="margin:0">${esc(L.note)}</div>`:''}${ws.length?`<div class="warn">${ic('triangle-alert')}<div><b>Please check:</b> ${ws.map(esc).join(' ')}</div></div>`:''}${b?`<button class="btn" data-a="open" data-id="${b.id}">${ic('file-search')}Check what was read</button>`:''}</section>`}
+
+function home(){const ym=thisMonth(),mb=S.bills.filter(b=>billMonth(b)==ym),purchases=sumOf(mb,['medicine_purchase']),otherExpenses=sumOf(mb,['expense']),expenses=r2(purchases+otherExpenses),revenue=sumOf(mb,REV_T),unclassified=S.bills.filter(b=>!TYPES[b.type]),att=S.meds.filter(m=>st(m)!='good'&&m.qty>0).sort(byExp),h=new Date().getHours(),
+stat=(l,v,sub)=>`<div class="card stat"><div class="mu sm">${l}</div><div class="v">${v}</div>${sub?`<div class="mu sm">${sub}</div>`:''}</div>`;
+return shell('home',`<div class="sp"><div><h1>${h<12?'Good morning':h<17?'Good afternoon':'Good evening'}, ${esc(String(S.user.name||'').split(' ')[0])}</h1><div class="mu sm"><span class="live"></span>${esc(CFG.HOSPITAL_NAME)}, live</div></div><button class="av" data-a="go" data-v="profile" aria-label="Profile">${esc(String(S.user.name||'?')[0].toUpperCase())}</button></div>
+${loadErrCard()}${lastCard()}
+<section class="chart-grid"><div class="card chart-card"><div class="chart-title">Revenue and expenses</div><div class="chart-subtitle">Six-month movement from saved bills</div><div class="chart-plot"><canvas id="cashflowChart" aria-label="Revenue and expenses by month"></canvas></div></div><div class="card chart-card"><div class="chart-title">Expense mix</div><div class="chart-subtitle">Where this month's expenses come from</div>${expenses?`<div class="chart-plot donut"><canvas id="expenseChart" aria-label="Expense categories this month"></canvas></div><div id="expenseLegend" class="chart-legend"></div>`:`<div class="chart-plot donut"><div class="chart-empty">Expense categories appear after bills are saved.</div></div>`}</div></section>
+<div class="g2">${stat('Expenses this month',inr(expenses),'All time: '+inr(sumOf(S.bills,EXP_T)))}${stat('Revenue this month',inr(revenue),'All time: '+inr(sumOf(S.bills,REV_T)))}${stat('Bills this month',mb.length)}${stat('Stock units',new Intl.NumberFormat('en-IN',{maximumFractionDigits:1}).format(S.meds.reduce((sum,m)=>sum+Math.max(0,+m.qty||0),0)))}${stat('Medicine types',S.meds.filter(m=>m.qty>0).length)}${stat('Needs attention',att.length)}${stat('Low stock items',S.meds.filter(m=>m.qty<=CFG.LOW_STOCK_LIMIT).length)}${unclassified.length?stat('Unclassified bills',unclassified.length,'Open a bill and choose its type'):''}</div>
+<section><b>Bills by type this month</b>${TKEYS.map(k=>{const l=mb.filter(b=>b.type==k);return`<button class="row" data-a="repgo" data-r="${k}"><div><b>${TYPES[k].s}</b><span class="mu sm">${l.length} ${l.length==1?'bill':'bills'} · ${TYPES[k].money=='expense'?'expense':'revenue'}</span></div><b class="num">${inr(sumOf(l))}</b></button>`}).join('')}</section>
+<section><b>Expenses breakdown</b><div class="row"><div><b>Medicine purchases</b><span class="mu sm">Supplier bills this month</span></div><b class="num">${inr(purchases)}</b></div><div class="row"><div><b>Other expenses</b><span class="mu sm">Expense bills this month</span></div><b class="num">${inr(otherExpenses)}</b></div><div class="row"><div><b>Total expenses</b></div><b class="num">${inr(expenses)}</b></div></section>
+<section><div class="sp"><b>Needs attention</b>${att.length?`<button class="lnk" data-a="go" data-v="meds">View all</button>`:''}</div>${att.length?att.slice(0,5).map(m=>`<div class="row"><div><b>${esc(m.name)}</b><span class="mu sm">Expires ${fd(m.expiry)}</span></div>${badge(m).split(' <')[0]}</div>`).join(''):`<div class="card mu" style="margin-top:8px">Nothing needs attention right now. Medicines that expire soon will show up here.</div>`}</section>
+<section><b>Your bills</b>
+${S.bills.length?`<label class="fl"><span class="mu sm">Search by name or bill number</span><input class="inp" data-k="f.bq" value="${esc(S.f.bq)}" type="search"></label>`:''}<div id="bl">${billsHtml()}</div></section>`)}
+function billsHtml(){const q=S.f.bq.trim().toLowerCase(),list=S.bills.filter(b=>!q||`${nameOf(b)} ${b.bill_number||''} ${b.file?.name||''}`.toLowerCase().includes(q));
+if(list.length)return list.map(billRow).join('');if(q)return`<div class="card mu" style="text-align:center;padding:24px 20px;margin-top:8px">No bills match "${esc(S.f.bq)}".</div>`;
+return`<div class="card stack" style="text-align:center;padding:32px 20px;margin-top:8px"><div>${ic('file-plus-2')}</div><div><b>No bills here yet</b><p class="mu sm">Upload your first bill and it will appear here straight away.</p></div><button class="btn pri" data-a="newbill">${ic('plus')}New bill</button></div>`}
+
+function drawDashboardCharts(){const canvas=$('#cashflowChart');if(!canvas)return;if(!window.Chart){document.querySelectorAll('.chart-plot').forEach(plot=>plot.innerHTML='<div class="chart-empty">Charts need an internet connection to load.</div>');return}const now=new Date(),months=Array.from({length:6},(_,index)=>{const date=new Date(now.getFullYear(),now.getMonth()-5+index,1);return{key:`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`,label:new Intl.DateTimeFormat('en',{month:'short'}).format(date),revenue:0,expenses:0}});
+for(const bill of S.bills){const month=months.find(item=>item.key==billMonth(bill));if(!month)continue;if(EXP_T.includes(bill.type))month.expenses+=+bill.total||0;if(REV_T.includes(bill.type))month.revenue+=+bill.total||0}
+const grid='rgba(0,0,0,.07)',green='#F47B20',coral='#111111',amber='#F47B20',chartContext=canvas.getContext('2d'),revenueGradient=chartContext.createLinearGradient(0,0,0,220),expenseGradient=chartContext.createLinearGradient(0,0,0,220);revenueGradient.addColorStop(0,'rgba(244,123,32,.25)');revenueGradient.addColorStop(1,'rgba(244,123,32,0)');expenseGradient.addColorStop(0,'rgba(17,17,17,.12)');expenseGradient.addColorStop(1,'rgba(17,17,17,0)');S.charts.push(new Chart(canvas,{type:'line',data:{labels:months.map(x=>x.label),datasets:[{label:'Revenue',data:months.map(x=>r2(x.revenue)),borderColor:green,backgroundColor:revenueGradient,fill:true,tension:.35,pointRadius:3,pointHoverRadius:5,borderWidth:2},{label:'Expenses',data:months.map(x=>r2(x.expenses)),borderColor:coral,backgroundColor:expenseGradient,fill:true,tension:.35,pointRadius:3,pointHoverRadius:5,borderWidth:2}]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{position:'bottom',labels:{usePointStyle:true,boxWidth:7,boxHeight:7,padding:18,color:'#66736F',font:{family:"'DM Sans', sans-serif",size:12}}},tooltip:{callbacks:{label:item=>`${item.dataset.label}: ${inr(item.parsed.y)}`}}},scales:{x:{grid:{display:false},ticks:{color:'#7A8581'}},y:{beginAtZero:true,grid:{color:grid},ticks:{color:'#666',callback:value=>CFG.CURRENCY+(value>=1e7?+(value/1e7).toFixed(1)+'Cr':value>=1e5?+(value/1e5).toFixed(1)+'L':value>=1e3?+(value/1e3).toFixed(1)+'K':value)}}}}}));
+const donut=$('#expenseChart');if(!donut)return;const ym=thisMonth(),currentBills=S.bills.filter(b=>billMonth(b)==ym),medicine=sumOf(currentBills,['medicine_purchase']),other=sumOf(currentBills,['expense']),purchases=r2(medicine+other);if(purchases<=0)return;
+S.charts.push(new Chart(donut,{type:'doughnut',data:{labels:['Medicine purchases','Other expenses'],datasets:[{data:[medicine,other],backgroundColor:[coral,amber],borderColor:'#FFFFFF',borderWidth:3,hoverOffset:5}]},options:{responsive:true,maintainAspectRatio:false,cutout:'70%',plugins:{legend:{display:false},tooltip:{callbacks:{label:item=>`${item.label}: ${inr(item.parsed)}`}}},},plugins:[{id:'expense-center',afterDraw(chart){const area=chart.chartArea;if(!area)return;const ctx=chart.ctx,cx=(area.left+area.right)/2,cy=(area.top+area.bottom)/2;ctx.save();ctx.textAlign='center';ctx.fillStyle='#111';ctx.font='700 17px Poppins';ctx.fillText(inr(purchases),cx,cy);ctx.fillStyle='#666';ctx.font='10px "DM Sans"';ctx.fillText('THIS MONTH',cx,cy+17);ctx.restore()}}]}));const legend=$('#expenseLegend');if(legend)legend.innerHTML=[["Medicine purchases",medicine,coral],["Other expenses",other,amber]].map(([label,value,color])=>`<div class="chart-key"><span class="chart-dot" style="background:${color}"></span><span>${label}</span><span>${inr(value)}</span></div>`).join('')}
+function clearDashboardCharts(){S.charts.forEach(chart=>chart.destroy());S.charts=[]}
+
+// saved bill names, most recently used first (only names that still have a bill)
+function savedNames(){return[...new Set(S.bills.map(b=>nameOf(b)).filter(n=>n&&n!='No name'))]}
+function chooser(){const names=savedNames();
+if(S.flow=='newName')return `<div class="flow in"><button class="lnk" data-a="backChoose">${ic('chevron-left')}Back</button>${steps(2)}<h1>New bill</h1><label class="fl">Name on bill<input class="inp" id="partyName" data-k="flowName" value="${esc(S.flowName)}" autocomplete="off" enterkeyhint="next"></label><p class="note">Write the supplier, patient or shop name shown on the bill.</p>${errP()}<div class="bar"><div><button class="btn pri" data-a="continueName" ${S.flowName.trim()?'':'disabled'}>Continue</button></div></div></div>`;
+if(S.flow=='existingName')return `<div class="flow in"><button class="lnk" data-a="backChoose">${ic('chevron-left')}Back</button>${steps(2)}<h1>Existing bill</h1><p class="mu">Choose a saved name to attach this bill to.</p><div class="stack">${names.map(name=>`<button class="card opt ${S.selectedName==name?'on':''}" data-a="selectName" data-name="${esc(name)}"><span class="ib">${ic('user-round')}</span><b>${esc(name)}</b></button>`).join('')}</div>${errP()}<div class="bar"><div><button class="btn pri" data-a="continueExisting" ${S.selectedName?'':'disabled'}>Continue</button></div></div></div>`;
+return `<div class="flow in"><button class="lnk" data-a="go" data-v="home">${ic('chevron-left')}Back</button>${steps(1)}<h1>Choose a bill</h1>${loadErrCard()}<button class="card opt" data-a="newName" ${S.loadErr?'disabled':''}><span class="ib">${ic('file-plus-2')}</span><span><b>New bill</b><span class="mu sm" style="display:block">Enter a name and scan a bill</span></span></button><button class="card opt" data-a="chooseExisting" ${names.length&&!S.loadErr?'':'disabled'}><span class="ib">${ic('folder-open')}</span><span><b>Existing bill</b><span class="mu sm" style="display:block">${names.length?'Scan a bill for a saved name':'Available after you save your first bill'}</span></span></button></div>`}
+
+function upload(){const f=S.up,pg=f?.pages[0],rt=f?.kind=='sheet'?'f5':f?.kind=='pdf'?'f3':touch?'f1':'f4',rot=(pg?.rot||0)*90;
+const pick=touch?`<div class="stack"><label class="card tile" for="f1"><span class="ib">${ic('camera')}</span><b>Take Photo</b></label><label class="card tile" for="f2"><span class="ib">${ic('image')}</span><b>Choose from Gallery</b></label><label class="card tile" for="f3"><span class="ib">${ic('file-text')}</span><b>Upload PDF</b></label><label class="card tile" for="f5"><span class="ib">${ic('file-spreadsheet')}</span><b>Upload Excel or CSV</b></label></div><p class="note">Tip: lay the bill flat in good light and fill the screen with the whole bill.</p>`:`<label class="drop" id="drop" for="f4">${ic('upload')}<b>Choose a bill image, PDF, Excel, or CSV</b><div class="mu sm">Up to 25 MB</div></label>`;
+return `<div class="flow in"><button class="lnk" data-a="backName">${ic('chevron-left')}Back</button>${steps(3)}<h1>Add your bill</h1><div class="card" style="margin:16px 0"><div class="mu sm">Name on bill</div><b>${esc(S.flowName)}</b></div>
+<input id="f1" type="file" accept="image/*" capture="environment" hidden><input id="f2" type="file" accept="image/*" hidden><input id="f3" type="file" accept="application/pdf,.pdf" hidden><input id="f4" type="file" accept="image/*,application/pdf,.pdf,.xlsx,.xls,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden><input id="f5" type="file" accept=".xlsx,.xls,.csv,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
+${f?`<div class="card stack">${f.kind=='image'?`<div class="prevbox"><img class="prev" src="${pg.url}" alt="Your bill" style="transform:rotate(${rot}deg)${rot%180?' scale(.72)':''}"></div><p class="mu sm" style="margin:0">Is the bill upright? If not, tap Rotate.</p><div class="g2"><button class="btn" data-a="rotate">${ic('rotate-cw')}Rotate</button><label class="btn" for="${rt}">${ic('refresh-cw')}Retake</label></div><button class="btn" data-a="rmfile">${ic('trash-2')}Remove</button>`:`<div class="sp" style="justify-content:flex-start">${ic('file-text')}<b>${esc(f.name)}</b></div><div class="g2"><label class="btn" for="${rt}">${ic('refresh-cw')}Change</label><button class="btn" data-a="rmfile">${ic('trash-2')}Remove</button></div>`}</div>`:pick}
+${errP()}<div class="bar"><div><button class="btn pri" data-a="submit" ${f?'':'disabled'}>Submit</button></div></div></div>`}
+
+const PSTEPS=['Opening your bill','Reading the text','Finding the details','Saving'];
+function proc(){return `<div class="flow stack in" style="padding-top:64px;text-align:center"><h1>${S.bad?(S.dup?'Already saved':'We could not read this bill'):'Reading your bill'}</h1><div class="card stack" style="text-align:left" id="psteps">${PSTEPS.map((l,j)=>{const c=j<S.step?'done':j==S.step?(S.bad?'bad':'act'):'';return `<div class="ps ${c}"><span class="d">${c=='done'?ic('check'):c=='bad'?ic('x'):''}</span><span class="${c?'':'mu'}">${l}</span></div>`}).join('')}</div>
+<p id="ocrStatus" class="${S.bad?'err':'mu sm'}">${esc(S.ocrMessage||'This takes a few seconds.')}</p>${S.bad?`<div class="stack">${S.dup?`<button class="btn pri" data-a="open" data-id="${S.dup}">${ic('file-search')}Open the saved bill</button><button class="btn" data-a="readAnyway">${ic('copy-plus')}Upload anyway</button>`:`<button class="btn pri" data-a="submit">Try again</button><button class="btn" data-a="manual">${ic('pencil')}Type the details myself</button>`}<button class="btn" data-a="chooseAgain">Choose another file</button><button class="btn" data-a="go" data-v="home">Go to dashboard</button></div>`:''}</div>`}
+function setStep(n){S.step=n;const box=$('#psteps');if(!box)return;box.querySelectorAll('.ps').forEach((el,j)=>{el.className='ps '+(j<n?'done':j==n?'act':'');el.querySelector('.d').innerHTML=j<n?ic('check'):'';el.lastElementChild.className=j<=n?'':'mu'});window.lucide&&lucide.createIcons()}
+function setReadProgress(message,step){S.ocrMessage=message;if(step!==undefined)setStep(step);const status=$('#ocrStatus');if(status)status.textContent=message}
+
+function kind(){const d=S.draft;return `<div class="flow in"><h1>What kind of bill is this?</h1><p class="mu">The bill was read (${d.items.length} ${d.items.length==1?'item':'items'}, total ${inr(billAmount(d))}), but its type is not clear. Choose one so the right numbers are updated.</p>${TKEYS.map(k=>`<button class="card opt ${S.type==k?'on':''}" data-a="pickType" data-t="${k}"><span class="ib">${ic(TYPES[k].i)}</span><span><b>${TYPES[k].q}</b><span class="mu sm" style="display:block">${TYPES[k].money=='expense'?'Adds to expenses':'Adds to revenue'}${TYPES[k].med?(k=='medicine_purchase'?', adds stock':', reduces stock'):''}</span></span></button>`).join('')}<div class="bar"><div class="g2"><button class="btn" data-a="cancelKind">Cancel</button><button class="btn pri" data-a="saveKind" ${TYPES[S.type]?'':'disabled'}>Save bill</button></div></div></div>`}
+
+function detail(){const b=S.bills.find(x=>x.id==S.detail);if(!b)return home();const T=TYPES[b.type]||{t:'Unclassified bill',ref:'Reference'},f=b.file,files=S.img[b.id]||[];const ws=(b.warnings||[]).map(warnText).filter(Boolean);
+return `<div class="flow stack in"><button class="lnk" data-a="go" data-v="home">${ic('chevron-left')}Back</button><div><div class="mu sm">${esc(T.t)}</div><h1>${esc(nameOf(b))}</h1></div>
+${!TYPES[b.type]?`<div class="warn">${ic('triangle-alert')}<div>This bill has no type yet, so it does not change stock or totals. Tap <b>Edit details</b> and choose its type.</div></div>`:''}
+${ws.length?`<div class="warn">${ic('triangle-alert')}<div><b>Please check against the paper bill:</b> ${ws.map(esc).join(' ')}</div></div>`:''}
+<div class="card" id="origbox">${f?(files.length?files.map(x=>/^image\//.test(x.type)||f.kind=='image'?`<img class="prev" src="${x.url}" alt="Original bill">`:`<a class="lnk" href="${x.url}" target="_blank" rel="noopener" download="${esc(f.name)}">${ic('file-text')}Open original file</a>`).join(''):`<div class="sp" style="justify-content:flex-start">${ic('file-text')}<b>${esc(f.name||'Bill file')}</b></div>`):`<span class="mu">No file was attached to this bill.</span>`}</div>
+<dl class="card dl"><dt>Bill type</dt><dd>${esc(T.t)}</dd><dt>Bill number</dt><dd>${esc(b.bill_number||'Not set')}</dd><dt>Date</dt><dd>${fd(b.bill_date)}</dd><dt>${esc(T.ref)}</dt><dd>${esc(b.ref||'Not set')}</dd><dt>Payment</dt><dd>${esc(b.payment_mode||'Not set')}</dd><dt>Tax</dt><dd class="num">${inr(b.tax)}</dd><dt>Discount</dt><dd class="num">${inr(b.discount)}</dd><dt><b>Total</b></dt><dd class="num"><b>${inr(b.total)}</b></dd></dl>
+${b.items.length?`<b>Items (${b.items.length})</b>${b.items.map(i=>`<div class="card sp"><div><b>${esc(i.description||'Item')}</b><div class="mu sm">${esc(String(+i.quantity||0))} ${TYPES[b.type]?.med?'units':'qty'}${+i.free?' + '+esc(i.free)+' free':''}${i.batch_no?', batch '+esc(i.batch_no):''}${i.manufacture_date?' | Mfg '+fd(i.manufacture_date):''}${i.expiry_date?' | Exp '+fd(i.expiry_date):''}</div></div><b class="num">${inr(+i.amount)}</b></div>`).join('')}`:''}
+${b.stock_movements?.length?`<p class="mu sm">Stock ${b.stock_movements[0].direction=='in'?'added':'reduced'} for ${b.stock_movements.length} ${b.stock_movements.length==1?'medicine':'medicines'}.</p>`:''}
+<p class="mu sm">Uploaded by ${esc(b.uploaded_by||'')} on ${fdt(b.created_at)}${b.edited_by?` · corrected by ${esc(b.edited_by)}`:''}</p>
+<button class="btn pri" data-a="edit">${ic('pencil')}Edit details</button>
+${S.ask?`<div class="card stack"><b>Delete this bill?</b><p class="mu sm">This cannot be undone. Stock movements will be reversed when safe.</p>${errP()}<div class="g2"><button class="btn" data-a="noask">Keep it</button><button class="btn pri" style="background:var(--er);border-color:var(--er)" data-a="del" ${S.busy?'disabled':''}>${busyLabel('Delete')}</button></div></div>`:`<button class="btn" data-a="ask">${ic('trash-2')}Delete bill</button>`}</div>`}
+
+function editView(){const e=S.edit,med=!!TYPES[e.type]?.med,x=(k,l,t,extra='')=>`<label class="fl">${l}<input class="inp" data-k="edit.${k}" value="${esc(k.split('.').reduce((o,p)=>o?.[p],e)??'')}" type="${t||'text'}" ${t=='number'?'inputmode="decimal" step="any"':''} ${extra}></label>`,isNew=e.mode!='edit';
+return `<div class="flow stack in"><button class="lnk" data-a="cancelEdit">${ic('chevron-left')}Back</button><h1>${isNew?'Enter bill details':'Edit bill'}</h1><p class="mu sm">${isNew?'Copy the details from the paper bill. Stock and totals are updated when you save.':'Fix anything that was read wrongly. Stock and totals are updated when you save.'}</p>
+<label class="fl">Bill type<select class="inp" data-k="edit.type" data-re="1">${!TYPES[e.type]?'<option value="">Choose a type</option>':''}${TKEYS.map(k=>`<option value="${k}" ${e.type==k?'selected':''}>${TYPES[k].q}</option>`).join('')}</select></label>
+${x('name','Name on bill')}${x('bill_number','Bill number')}${x('bill_date','Bill date','date')}<div class="g2">${x('total','Total','number')}${x('tax','Tax','number')}</div><div class="g2">${x('discount','Discount','number')}${x('payment_mode','Payment')}</div>
+<b>Items</b>${e.items.map((it,i)=>`<div class="card stack eitem"><div class="sp"><b>Item ${i+1}</b><button class="lnk" data-a="rmItem" data-i="${i}">Remove</button></div>${x(`items.${i}.description`,'Name')}${med?`<div class="g2">${x(`items.${i}.batch_no`,'Batch no')}${x(`items.${i}.expiry_date`,'Expiry date','date')}</div><div class="g2">${x(`items.${i}.manufacture_date`,'Mfg date','date')}${x(`items.${i}.mrp`,'MRP','number')}</div>`:''}<div class="g2">${x(`items.${i}.quantity`,'Quantity','number')}${med&&e.type=='medicine_purchase'?x(`items.${i}.free`,'Free','number'):x(`items.${i}.amount`,'Amount','number')}</div>${med&&e.type=='medicine_purchase'?x(`items.${i}.amount`,'Amount','number'):''}</div>`).join('')}
+<button class="btn" data-a="addItem">${ic('plus')}Add item</button>${errP()}
+<div class="bar"><div class="g2"><button class="btn" data-a="cancelEdit">Cancel</button><button class="btn pri" data-a="saveEdit" ${S.busy?'disabled':''}>${busyLabel('Save changes')}</button></div></div></div>`}
+
+const medCard=m=>`<div class="card stack" style="margin-top:8px"><div class="sp" style="align-items:flex-start"><b>${esc(m.name)}</b><span>${badge(m)}</span></div><dl class="dl"><dt>Batch no</dt><dd>${esc(m.batch||'Not set')}</dd><dt>Quantity</dt><dd class="num">${esc(fmtQty(m))}${+m.pack_n>1?` <span class="mu sm">(packs of ${m.pack_n})</span>`:''}</dd><dt>Manufactured</dt><dd>${fd(m.manufacture_date)}</dd><dt>Expiry</dt><dd>${fd(m.expiry)}</dd><dt>Supplier</dt><dd>${esc(m.supplier||'Not set')}</dd></dl></div>`;
+function medList(){const q=S.f.mq.toLowerCase(),L=S.meds.filter(m=>(!q||(m.name+' '+m.batch).toLowerCase().includes(q))&&(S.mf=='all'||(S.mf=='soon'&&st(m)=='soon')||(S.mf=='exp'&&st(m)=='exp')||(S.mf=='low'&&m.qty<=CFG.LOW_STOCK_LIMIT))).sort(byExp);
+return L.length?L.map(medCard).join(''):`<div class="card mu" style="text-align:center;padding:32px 20px;margin-top:8px">${S.meds.length?'No medicines match. Try a different search or filter.':'No medicines yet. Upload a medicine purchase bill to start tracking stock.'}</div>`}
+const meds=()=>shell('meds',`<div class="sp"><h1>Medicines</h1><button class="btn" style="width:auto" data-a="addmed">${ic('plus')}Add</button></div><label class="fl" style="position:relative"><span class="mu sm">Search by name or batch</span><input class="inp" data-k="f.mq" value="${esc(S.f.mq)}" type="search"></label>
+<div class="chips">${[['all','All'],['soon','Expiring soon'],['exp','Expired'],['low','Low stock']].map(c=>`<button class="chip ${S.mf==c[0]?'on':''}" data-a="mf" data-f="${c[0]}">${c[1]}</button>`).join('')}</div><div id="ml">${medList()}</div>${S.sheet?medSheet():''}`);
+const medSheet=()=>{const f=S.mform,x=(k,l,t)=>`<label class="fl">${l}<input class="inp" data-k="mform.${k}" value="${esc(f[k])}" type="${t||'text'}" ${t=='number'?'inputmode="decimal"':''}></label>`;return `<div class="sheet"><div class="stack"><h1>Add medicine</h1>${x('name','Medicine name')}${x('batch','Batch no')}${x('qty','Quantity','number')}${x('manufacture_date','Manufacturing date','date')}${x('expiry','Expiry date','date')}${x('supplier','Supplier')}${errP()}<div class="g2"><button class="btn" data-a="closemed">Cancel</button><button class="btn pri" data-a="savemed" ${S.busy?'disabled':''}>${busyLabel('Add medicine')}</button></div></div></div>`};
+
+const REPS=[['all','All bills'],...TKEYS.map(k=>[k,TYPES[k].s]),['stock','Medicine stock']];
+function reports(){const r=S.rep,st_=r=='stock',L=st_?[...S.meds].sort(byExp):S.bills.filter(b=>r=='all'||b.type==r).sort(byDate);
+// "All bills" adds revenue and expenses up separately: one sum of both would be a meaningless number
+const totalRow=(l,label)=>`<tr><td colspan="2"><b>${label} (${l.length} ${l.length==1?'bill':'bills'})</b></td><td class="num r"><b>${inr(sumOf(l))}</b></td></tr>`;
+const totals=st_?'':r=='all'?[[L.filter(b=>EXP_T.includes(b.type)),'Total expenses'],[L.filter(b=>REV_T.includes(b.type)),'Total revenue']].filter(([l])=>l.length).map(([l,t])=>totalRow(l,t)).join(''):totalRow(L,'Total');
+return shell('reports',`<h1>Reports</h1><div class="chips">${REPS.map(([k,l])=>`<button class="chip ${r==k?'on':''}" data-a="rep" data-r="${k}">${l}</button>`).join('')}</div>
+<div class="card" style="overflow-x:auto;padding:8px 12px">${L.length?`<table class="rtab"><tr>${st_?'<th>Medicine</th><th>Qty</th><th>Expiry</th>':'<th>Date</th><th>Name</th><th class="r">Amount</th>'}</tr>${L.map(x=>st_?`<tr><td><b>${esc(x.name)}</b><span class="mu sm">Batch ${esc(x.batch||'-')}${x.manufacture_date?' · Mfg '+fd(x.manufacture_date):''}</span></td><td class="num">${esc(fmtQty(x))}</td><td>${fd(x.expiry)}</td></tr>`:`<tr data-a="open" data-id="${x.id}"><td>${fd(x.bill_date)}</td><td><b>${esc(nameOf(x))}</b><span class="mu sm">${r=='all'?esc(TYPES[x.type]?.s||'Unclassified')+' · ':''}${esc(x.bill_number||'No bill no')}</span></td><td class="num r">${inr(x.total)}</td></tr>`).join('')}${totals}</table>`:`<p class="mu" style="padding:24px 12px;text-align:center">Nothing to show here yet. Saved bills and stock will fill this table.</p>`}</div>
+<button class="btn" data-a="export">${ic('download')}Download Excel</button><p class="note">The Excel file has a sheet for every bill type, all bill items, and medicine stock.</p>${sheetLinkHtml()}`)}
+
+function legacyData(){const d=LS.get(LEGACY_KEY,null);return d&&(Array.isArray(d.bills)&&d.bills.length||Array.isArray(d.meds)&&d.meds.length)?d:null}
+function profile(){const old=legacyData();return shell('profile',`<h1>Profile</h1><div class="card dl"><dt>Name</dt><dd>${esc(S.user.name)}</dd><dt>Email</dt><dd>${esc(S.user.email)}</dd><dt>Role</dt><dd>Admin</dd></div>
+${old?`<div class="card stack"><b>Bills from the old version</b><p class="mu sm">This browser still has ${old.bills?.length||0} bills and ${old.meds?.length||0} medicines saved by the old version. Move them into this account (${esc(S.user.email)}) and check them afterwards.</p>${errP()}<button class="btn" data-a="importOld" ${S.busy?'disabled':''}>${busyLabel('Move them into my account')}</button></div>`:''}
+${ONLINE?`<button class="btn" data-a="sheetSync" ${S.sheetBusy?'disabled':''}>${S.sheetBusy?'<span class="spin"></span>Rebuilding...':ic('refresh-cw')+'Rebuild my rows in the Google Sheet'}</button>${old?'':errP()}`:''}
+<button class="btn" data-a="out">${ic('log-out')}Sign out</button>`)}
+
+/* ===================== reading bills ===================== */
+function fileKind(file){const name=file.name.toLowerCase();if(file.type.startsWith('image/')||/\.(jpe?g|png|webp|bmp|gif|heic|heif)$/.test(name))return'image';if(file.type=='application/pdf'||name.endsWith('.pdf'))return'pdf';if(/\.(xlsx|xls|csv)$/.test(name)||/spreadsheet|excel|text\/csv/.test(file.type))return'sheet';return''}
+const loadImageEl=file=>new Promise((res,rej)=>{const u=URL.createObjectURL(file),i=new Image();i.onload=()=>res({img:i,done:()=>URL.revokeObjectURL(u)});i.onerror=()=>{URL.revokeObjectURL(u);rej(new Error('This photo cannot be opened. Choose a JPG or PNG photo.'))};i.src=u});
+const parseCtx=()=>({hospitalKey:CFG.HOSPITAL_KEY,prior:usualType(S.flowName)});
+async function hashPages(pages){try{if(!crypto.subtle)return'';const parts=[];for(const p of pages)parts.push(new Uint8Array(await crypto.subtle.digest('SHA-256',await p.file.arrayBuffer())));let h=parts[0];if(parts.length>1){const all=new Uint8Array(parts.length*32);parts.forEach((x,i)=>all.set(x,i*32));h=new Uint8Array(await crypto.subtle.digest('SHA-256',all))}return[...h].map(b=>b.toString(16).padStart(2,'0')).join('')}catch{return''}}
+
+/* AI reader (Claude, called by the Google Sheet's script): the accurate path */
+const monthDate=(v,end)=>{const s=String(v||'').trim();return !s?'':okDate(s)?s:BillParser.parseMonthDate(s,end)};
+function fromAI(a){if(!a||a.is_bill===false)throw new Error('This does not look like a bill. Take a photo of the whole bill and try again.');
+const type=TYPES[a.bill_type]?a.bill_type:'',out=OUT_T.includes(type);
+const items=(a.items||[]).map(i=>{const desc=String(i.description||'').replace(/\s+/g,' ').trim(),pack=String(i.pack||'').trim();return{description:desc,batch_no:normBatch(i.batch_no),pack,manufacture_date:monthDate(i.manufacture_date,false),expiry_date:monthDate(i.expiry_date,true),quantity:num(i.quantity),free:num(i.free_quantity),mrp:num(i.mrp),rate:num(i.rate),disc:num(i.discount_percent),gst:num(i.gst_percent),amount:num(i.amount),pack_n:BillParser.packSize(pack)||BillParser.packSize(desc)||(BillParser.SINGLE.test(desc)?1:''),unclear:!!i.unclear}}).filter(i=>i.description);
+let date=String(a.bill_date||'').trim();if(!okDate(date))date=(BillParser.findDates(date)[0]||{}).v||'';
+const d={bill_number:String(a.bill_number||'').trim(),bill_date:date,payment_mode:String(a.payment_mode||'').trim(),total_amount:num(a.total_amount),tax_amount:num(a.tax_amount),discount_amount:num(a.discount_amount),subtotal:num(a.subtotal),
+seller:String((out?a.seller_name:(a.patient_name||a.buyer_name))||'').trim(),party_ref:String((out?a.seller_gstin:a.patient_id)||'').trim(),type,type_sure:!!a.type_certain&&!!type,items,unclear:(a.unclear_fields||[]).map(String),warnings:[],text:JSON.stringify(a)};
+if(d.total_amount===''&&items.length){const s=r2(items.reduce((t,i)=>t+(+i.amount||0),0));if(s>0){d.total_amount=r2(s+(+d.tax_amount||0)-Math.abs(+d.discount_amount||0));d.warnings.push('total_calculated')}}
+return d}
+async function aiRead(up,id){const pages=[];
+if(up.kind=='image'){for(const[i,p]of up.pages.entries()){setReadProgress(up.pages.length>1?`Preparing page ${i+1} of ${up.pages.length}...`:'Preparing the photo...',0);const{img,done}=await loadImageEl(p.file);try{pages.push({media_type:'image/jpeg',data:await b64(await BillImage.jpeg(img,p.rot||0,2576,0.88))})}finally{done()}}}
+else{const f=up.pages[0].file;if(f.size>18*1024*1024)throw new Error('This PDF is too large for the AI reader.');pages.push({media_type:'application/pdf',data:await b64(f)})}
+if(S.run!=id)throw new Error('cancelled');
+setReadProgress('Reading every line of the bill. This usually takes 20 to 60 seconds...',1);
+const j=await api('read',{pages,hospital_name:CFG.HOSPITAL_NAME,bill_name:S.flowName,usual_type:usualType(S.flowName)},340000);
+if(!j.bill)throw new Error('The AI reader returned nothing.');
+const d=fromAI(j.bill);d.read={source:'ai'};return d}
+
+/* basic reader (in the browser, works offline): Tesseract OCR + BillParser */
+const READ={ready:null,worker:null,log:null};
+function ocrReady(){if(!window.Tesseract)return Promise.reject(new Error('The bill reader could not load. Check your internet connection and try again.'));
+if(!READ.ready){READ.ready=(async()=>{const w=await Tesseract.createWorker('eng',1,{logger:m=>READ.log&&READ.log(m)});await w.setParameters({tessedit_pageseg_mode:'6',preserve_interword_spaces:'1',user_defined_dpi:'300'});READ.worker=w;return w})();READ.ready.catch(()=>{READ.ready=null})}return READ.ready}
+const resetReader=()=>{try{READ.worker&&READ.worker.terminate()}catch{}READ.worker=null;READ.ready=null};
+const warmReader=()=>{if(ONLINE&&S.server?.ai!==false)return;try{ocrReady().catch(()=>{})}catch{}};
+async function ocrCanvas(canvas,label){
+READ.log=m=>{if(m.status=='recognizing text')setReadProgress(`${label} ${Math.round((m.progress||0)*100)}%`,1);else if(/loading|initializ/.test(m.status||''))setReadProgress('Getting the bill reader ready. The first time can take a minute...',1)};
+const w=await withTimeout(ocrReady(),150000,'The bill reader took too long to load. Check your internet connection and try again.',resetReader);
+const r=await withTimeout(w.recognize(canvas),150000,'Reading took too long. Try a clearer photo taken closer to the bill.',resetReader);
+return{conf:r.data.confidence||0,lines:(r.data.lines||[]).map(l=>({toks:(l.words||[]).map(wd=>({t:wd.text,x0:wd.bbox.x0,x1:wd.bbox.x1,y0:wd.bbox.y0,y1:wd.bbox.y1,c:wd.confidence}))}))}}
+async function ocrImages(up,id){const all=[];let conf=0;
+for(const[pi,p]of up.pages.entries()){const pre=up.pages.length>1?`Page ${pi+1}: `:'';const{img,done}=await loadImageEl(p.file);try{setReadProgress(pre+'Cleaning up the photo...',1);await sleep(30);
+let best=null;const rot=p.rot||0,side=(rot%2==0)&&BillImage.sideways(img),order=side?[1,3,0]:[0,1,3,2];
+for(const extra of order){if(S.run!=id)throw new Error('cancelled');const r=await ocrCanvas(BillImage.prepare(img,rot+extra),pre+(extra?'Turning the photo and reading again...':'Reading...'));const d=BillParser.parse({source:'ocr',lines:r.lines},parseCtx());const real=d.total_amount!==''&&!d.warnings.includes('total_calculated');const score=d.items.length*2+(real?4:0)+(d.bill_date?2:0)+(d.bill_number?2:0)+r.conf/10;if(!best||score>best.score)best={score,r,rot:rot+extra};if(d.items.length&&real&&(d.bill_date||d.bill_number)||r.conf>=70&&(d.bill_date||d.bill_number||d.items.length))break}
+p.rot=((best.rot%4)+4)%4;all.push(...best.r.lines);conf+=best.r.conf}finally{done()}}
+const d=BillParser.parse({source:'ocr',lines:all},parseCtx());d.read={source:'basic',conf:Math.round(conf/up.pages.length)};return d}
+function groupLines(toks){toks.sort((a,b)=>a.y0-b.y0||a.x0-b.x0);const lines=[];for(const t of toks){const h=Math.max(1,t.y1-t.y0),cy=(t.y0+t.y1)/2,l=lines.find(l=>Math.abs(l.cy-cy)<=Math.max(h,l.h)*0.5);if(l){l.toks.push(t)}else lines.push({cy,h,toks:[t]})}lines.sort((a,b)=>a.cy-b.cy);return lines.map(l=>({toks:l.toks.sort((a,b)=>a.x0-b.x0)}))}
+async function readPdf(file,id){if(!window.pdfjsLib)throw new Error('PDF reading is unavailable. Check your internet connection or upload photos of the pages instead.');pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+const pdf=await withTimeout(pdfjsLib.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise,30000,'Could not open this PDF in time. Try another copy.');if(pdf.numPages>30)throw new Error('This PDF has more than 30 pages. Split it into smaller files and try again.');
+const lines=[];let source='pdf';
+for(let p=1;p<=pdf.numPages;p++){if(S.run!=id)throw new Error('cancelled');setReadProgress(`Reading PDF page ${p} of ${pdf.numPages}...`,1);const page=await withTimeout(pdf.getPage(p),20000,'This PDF page could not be opened. Try another copy.'),vp=page.getViewport({scale:1}),content=await withTimeout(page.getTextContent(),20000,'This PDF page could not be read. Try another copy.');
+const toks=content.items.filter(it=>it.str&&it.str.trim()).map(it=>{const x=it.transform[4],y=it.transform[5],h=Math.abs(it.height||it.transform[3])||10,w=it.width||it.str.length*h*0.5;return{t:it.str.trim(),x0:x,x1:x+w,y0:vp.height-y-h,y1:vp.height-y}});
+if(toks.map(t=>t.t).join('').replace(/\s/g,'').length<25){source='ocr';const scale=Math.min(3.5,2400/vp.width),view=page.getViewport({scale}),c=document.createElement('canvas');c.width=Math.ceil(view.width);c.height=Math.ceil(view.height);const ctx=c.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,c.width,c.height);await withTimeout(page.render({canvasContext:ctx,viewport:view}).promise,30000,'This PDF page could not be shown. Try photos of the pages instead.');
+const r=await ocrCanvas(BillImage.prepare(c,0),`Reading page ${p} of ${pdf.numPages}...`);lines.push(...r.lines)}
+else lines.push(...groupLines(toks))}
+return{source,lines}}
+function sheetCellText(cell){const pad=n=>String(n).padStart(2,'0');if(cell.t=='d'&&cell.v instanceof Date)return`${pad(cell.v.getDate())}/${pad(cell.v.getMonth()+1)}/${cell.v.getFullYear()}`;if(cell.t=='n'&&cell.z&&XLSX.SSF.is_date(cell.z)){const d=XLSX.SSF.parse_date_code(cell.v);if(d&&d.y>1900)return`${pad(d.d)}/${pad(d.m)}/${d.y}`}if(cell.t=='n')return String(cell.v);return String(cell.w??cell.v??'').trim()}
+async function readSheet(file){if(!window.XLSX)throw new Error('Excel reading is unavailable. Check your internet connection and try again.');const csv=/\.csv$/i.test(file.name)||/csv/.test(file.type);
+const book=csv?XLSX.read(await file.text(),{type:'string',raw:true}):XLSX.read(await file.arrayBuffer(),{type:'array',cellDates:false,cellNF:true});const ws=book.Sheets[book.SheetNames[0]];if(!ws||!ws['!ref'])throw new Error('This spreadsheet has no readable sheet.');
+const R=XLSX.utils.decode_range(ws['!ref']),lines=[];for(let r=R.s.r;r<=Math.min(R.e.r,R.s.r+3000);r++){const toks=[];for(let c=R.s.c;c<=Math.min(R.e.c,R.s.c+60);c++){const cell=ws[XLSX.utils.encode_cell({r,c})];if(!cell||cell.v==null||cell.v==='')continue;const t=sheetCellText(cell);if(t)toks.push({t,x0:c*100,x1:c*100+90,y0:r*20,y1:r*20+16})}if(toks.length)lines.push({toks})}
+return{source:'sheet',lines}}
+const fromParser=(d,source)=>({bill_number:d.bill_number,bill_date:d.bill_date,payment_mode:d.payment_mode,total_amount:d.total_amount,tax_amount:d.tax_amount,discount_amount:d.discount_amount,subtotal:d.subtotal,seller:d.party_name||'',party_ref:d.party_ref,type:d.type,type_sure:d.type_sure,items:d.items,unclear:[],warnings:d.warnings,text:d.text,read:{source}});
+function looksLikeBill(d){const real=d.total_amount!==''&&!d.warnings.includes('total_calculated');return d.items.length>0&&!!(d.bill_date||d.bill_number||real)||real&&!!(d.bill_number||d.bill_date)}
+
+async function startRead(force=false){const id=S.run=uid();S.step=0;S.bad=0;S.dup=null;S.draft=null;S.retrySave=false;S.pendingId=null;S.forced=!!force;S.msg='';S.ocrMessage='Opening your bill...';S.view='proc';render();scrollTo(0,0);
+try{const up=S.up;if(!up?.pages?.length)throw new Error('Choose a photo, PDF, Excel, or CSV file to continue.');
+up.hash=up.hash||await hashPages(up.pages);
+// the exact same photo or file was saved before: stop before reading it again
+if(!force){const hit=up.hash&&S.bills.find(b=>b.file_hash==up.hash);if(hit){S.run=0;S.bad=1;S.dup=hit.id;S.step=2;S.ocrMessage=`This bill is already saved${hit.bill_number?' (bill no. '+hit.bill_number+')':''}. It was not added again.`;return render()}}
+let d=null,note='';
+if(up.kind=='sheet'){setReadProgress('Reading spreadsheet rows...',1);const doc=await readSheet(up.pages[0].file);setReadProgress('Finding the details...',2);d=fromParser(BillParser.parse(doc,parseCtx()),'spreadsheet')}
+else{if(ONLINE&&S.server?.ai!==false){try{d=await aiRead(up,id)}catch(e){if(S.run!=id)return;note=e.message;console.warn('AI reader:',e)}}
+if(!d){if(note)setReadProgress('The AI reader is not available, so the basic reader is used. '+note,1);if(up.kind=='image')d=fromParser(await ocrImages(up,id),'basic');else{const doc=await readPdf(up.pages[0].file,id);d=fromParser(BillParser.parse(doc,parseCtx()),'basic')}}}
+if(S.run!=id)return;setReadProgress('Finding the details...',2);
+if(!looksLikeBill(d))throw new Error(up.kind=='sheet'?'Could not find bill items in this spreadsheet. Use a sheet with column headings such as Item, Qty and Amount.':'Could not find bill details in this file. Take a clear photo of the whole bill (flat, good light) or choose another file.'+(note?' ('+note+')':''));
+S.run=0;S.draft=d;if(ONLINE&&d.read?.source=='basic')d.read_note='Read by the basic reader because the AI reader is not available'+(note?' ('+note.replace(/\.$/,'')+')':'')+'. Check the numbers against the paper bill.';
+// the same bill (same bill number) was saved before
+if(!force){const dup=findDuplicate({hash:up.hash,bill_number:d.bill_number,bill_date:d.bill_date,total:billAmount(d),name:S.flowName,items:d.items.length});if(dup){S.bad=1;S.dup=dup.bill.id;S.ocrMessage=`This bill is already saved${dup.bill.bill_number?' (bill no. '+dup.bill.bill_number+')':''}. It was not added again.`;return render()}}
+afterRead(force)}
+catch(e){if(S.run!=id)return;S.run=0;S.bad=1;const fk=S.up?.kind;let m=e.message||'We could not read this file. Try another copy.';if(fk=='pdf'&&/invalid pdf|pdf structure|missing pdf|unexpected server response|password/i.test(m))m='This PDF is damaged or locked with a password. Choose another copy.';if(fk=='sheet'&&/invalid|rangeerror|cannot read|unsupported|array length|zip/i.test(m))m='This spreadsheet could not be read. Try saving it as .xlsx or .csv.';S.ocrMessage=m;render()}}
+// a clear bill type is saved straight away; an unclear one is asked first ("What kind of bill is this?")
+function afterRead(force){const d=S.draft,usual=usualType(S.flowName);S.forced=!!force;
+if(TYPES[d.type]&&(d.type_sure||usual==d.type)){S.type=d.type;return autoSave(force)}
+S.type=usual||(TYPES[d.type]?d.type:'');S.view='kind';render()}
+// the read bill is saved at once; it can be checked and corrected afterwards ("Check what was read")
+function autoSave(forced){const d=S.draft;if(!d)return go('home');S.forced=!!forced;S.bad=0;S.dup=null;S.retrySave=false;
+S.edit=draftEditor(d,{force:forced,note:d.read_note});S.edit.mode='auto';S.edit.type=S.type;S.edit.newId=S.pendingId||(S.pendingId=uid());
+S.step=3;S.ocrMessage='Saving...';S.view='proc';saveBill()}
+
+const editItem=i=>({description:i.description||'',batch_no:i.batch_no||'',manufacture_date:okDate(i.manufacture_date)?i.manufacture_date:'',expiry_date:okDate(i.expiry_date)?i.expiry_date:'',quantity:str(i.quantity),free:str(i.free),pack:i.pack||'',pack_n:i.pack_n||'',mrp:str(i.mrp),rate:str(i.rate),disc:str(i.disc),gst:str(i.gst),amount:str(i.amount),unclear:!!i.unclear});
+const blankItem=()=>editItem({quantity:1});
+function draftEditor(d,{force,note}={}){const usual=usualType(S.flowName);let type=TYPES[d.type]?d.type:'',suggested='';
+if(type&&!d.type_sure){suggested=type;type=usual||''}
+const w=[...(d.warnings||[])];if(dateOdd(d.bill_date))w.push('date_odd');const unc=(d.unclear||[]).filter(f=>FIELD_TEXT[f]);if(unc.length)w.push('not_read:'+[...new Set(unc.map(f=>FIELD_TEXT[f]))].join(', '));
+const e={mode:'review',id:null,name:S.flowName.trim(),name_id:S.flowNameId,type,suggested,bill_number:d.bill_number||'',bill_date:okDate(d.bill_date)?d.bill_date:'',payment_mode:d.payment_mode||'',total:str(d.total_amount),tax:str(d.tax_amount),discount:str(d.discount_amount===''?'':Math.abs(d.discount_amount)),subtotal:str(d.subtotal),seller:d.seller||'',ref:d.party_ref||'',items:d.items.map(editItem),unclear:d.unclear||[],warnings:w,read_source:d.read?.source||'',read_note:note||'',raw_text:String(d.text||'').slice(0,20000),file_hash:S.up?.hash||'',dup:null,dupAck:!!force};
+if(!e.items.length)e.items.push(blankItem());
+const dup=findDuplicate({hash:force?'':e.file_hash,bill_number:e.bill_number,bill_date:e.bill_date,total:+num(e.total)||0,name:e.name,items:d.items.length});if(dup)e.dup=dup.bill.id;
+return e}
+
+async function prepareFiles(up){if(!up)return null;const out=[];
+if(up.kind=='image'){for(const p of up.pages){const{img,done}=await loadImageEl(p.file);try{out.push({blob:await BillImage.jpeg(img,p.rot||0,2000,0.8),type:'image/jpeg',ext:'jpg'})}finally{done()}}}
+else{const f=up.pages[0].file;if(f.size<=15*1024*1024)out.push({blob:f,type:f.type||(up.kind=='pdf'?'application/pdf':'application/octet-stream'),ext:(f.name.split('.').pop()||'bin').toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,5)||'bin'})}
+return out}
+
+async function saveBill(){const e=S.edit;if(!e||S.busy)return;const auto=e.mode=='auto';S.msg='';
+// an automatic save that fails is shown on the reading screen; a typed or corrected bill keeps its form open
+const fail=(m,retry)=>{S.busy=0;if(auto){S.bad=1;S.step=3;S.ocrMessage=m;S.retrySave=!!retry;S.view='proc';return render()}S.msg=m;render();setTimeout(()=>$('.err')?.scrollIntoView({block:'center',behavior:'smooth'}),30)};
+if(S.loadErr)return fail('Your saved bills could not be loaded, so nothing can be saved yet. Go to the dashboard and tap Try again.');
+if(!TYPES[e.type])return fail('Choose the bill type.');
+const name=String(e.name||'').trim();if(!name)return fail('Enter the name on the bill.');
+const items=e.items.map(i=>({description:String(i.description||'').replace(/\s+/g,' ').trim(),batch_no:normBatch(i.batch_no),manufacture_date:okDate(i.manufacture_date)?i.manufacture_date:'',expiry_date:okDate(i.expiry_date)?i.expiry_date:'',quantity:num(i.quantity),free:num(i.free),pack:i.pack||'',pack_n:+i.pack_n||'',mrp:num(i.mrp),rate:num(i.rate),disc:num(i.disc),gst:num(i.gst),amount:num(i.amount)})).filter(i=>i.description);
+const ck=checks(e);let total=num(e.total);if(total===''||total<=0)total=r2(ck.sum+(+num(e.tax)||0)-Math.abs(+num(e.discount)||0));
+if(!(total>0))return fail(auto?'The bill amount could not be read. This bill was not saved. Take a clearer photo, or type the details yourself.':'Enter the bill total.');
+const date=okDate(e.bill_date)?e.bill_date:'',old=e.id?S.bills.find(b=>b.id==e.id):null;
+if(!old){e.newId=e.newId||uid();const dup=findDuplicate({id:e.newId,hash:e.file_hash,bill_number:e.bill_number,bill_date:date,total,name,items:items.length});
+if(dup&&!e.dupAck){const said=`This bill is already saved${dup.bill.bill_number?' (bill no. '+dup.bill.bill_number+')':''}.`;if(auto){S.busy=0;S.bad=1;S.dup=dup.bill.id;S.ocrMessage=said+' It was not added again.';S.view='proc';return render()}e.dupAck=true;return fail(said+' Tap Save changes again only if it is really a different bill.')}
+e.forced=!!dup}
+const now=new Date().toISOString(),up=S.up;
+const bill={id:old?old.id:e.newId,type:e.type,bill_number:String(e.bill_number||'').trim(),bill_date:date,seller:String(e.seller||'').trim(),ref:String(e.ref||'').trim(),payment_mode:String(e.payment_mode||'').trim(),subtotal:num(e.subtotal),tax:Math.abs(+num(e.tax)||0),discount:Math.abs(+num(e.discount)||0),total:r2(total),items,warnings:[],stock_movements:[],
+file:old?old.file:(up?{name:up.name,kind:up.kind,pages:up.pages.length,stored:false}:null),file_hash:old?(old.file_hash||''):(e.file_hash||''),read_source:old?(old.read_source||''):(e.read_source||'typed'),raw_text:old?(old.raw_text||''):(e.raw_text||''),forced:old?!!old.forced:!!e.forced,uploaded_by:old?old.uploaded_by:S.user.name,edited_by:old?S.user.name:'',created_at:old?old.created_at:now,updated_at:now};
+// what to check against the paper bill: what the reader was unsure of, and what is missing or does not add up
+const unclear=auto?e.items.filter(i=>i.unclear&&String(i.description||'').trim()).length:0;
+bill.warnings=[...new Set([...(auto?e.warnings||[]:[]),...savedWarnings(bill,checks({...e,total:String(total)}).match),...(unclear?['unclear_items:'+unclear]:[])])];
+const medsCopy=S.meds.map(m=>({...m}));if(old)reverseStock(old,medsCopy,false);
+bill._name=name;const mv=applyStock(bill,medsCopy);delete bill._name;bill.stock_movements=mv.movements;
+const neg=medsCopy.find(m=>(+m.qty||0)<-0.0005);if(neg)return fail(`This change would make the stock of ${neg.name} go below zero, because some of it was already sold. Change or delete that sale bill first.`);const drop=old?emptyLots(old,medsCopy,mv.movements):[],changed=changedMeds(medsCopy,drop);
+// a bill given another name is filed under that name
+const sameName=!old||lc(name)==lc(nameOf(old)),nameId=(sameName&&e.name_id)||S.names.find(n=>lc(n.name)==lc(name))?.id||uid();
+S.busy=1;render();
+let res;try{const files=old?null:await prepareFiles(up).catch(()=>null);res=await Store.saveBill(S.user,{name:{id:nameId,name,type:e.type},bill,meds:changed,drop,files})}
+catch(err){return fail(err.message||'Could not save. Try again.',true)}
+const next=mergeSave(S,{name:{id:res.name_id,name,type:e.type},bill:{...bill,file:res.file},meds:changed,drop});S.names=next.names;S.bills=next.bills;S.meds=next.meds;
+S.busy=0;S.msg='';
+// a correction refreshes the card only when it is the last bill saved
+if(!old||S.last?.id==bill.id)setLast({id:bill.id,impact:impactOf(bill,mv),shortage:shortageOf(bill,mv),note:[auto?e.read_note:'',res.photoError?`The bill was saved, but its photo could not be kept (${res.photoError}).`:''].filter(Boolean).join(' ')});S.edit=null;S.draft=null;S.dup=null;S.bad=0;S.retrySave=false;S.pendingId=null;
+if(old){S.detail=bill.id;go('detail');toast('Bill corrected. Stock and totals updated')}
+else{clearUp();S.flowName='';S.flowNameId='';S.selectedName='';S.flow='choose';go('home');toast(`Bill saved: ${inr(bill.total)} ${TYPES[bill.type].money=='revenue'?'revenue':'expense'}`)}}
+
+/* ===================== Google Sheet rows ===================== */
+// what the visible Bills and Items tabs get for one bill: only the values the bill really has, so their headings follow the scans
+function sheetRows(b,name){const T=TYPES[b.type]||{},nm=name||nameOf(b),put=(o,k,v)=>{if(v!==''&&v!=null&&v!==false&&!(typeof v=='number'&&!Number.isFinite(v)))o[k]=v},pos=v=>+v>0?+v:'',n=v=>{const x=num(v);return x===''?'':x};
+const bill={};put(bill,'Added on',b.created_at);put(bill,'Added by',b.uploaded_by);put(bill,'Bill name',nm);put(bill,'Kind of bill',T.s);put(bill,'Money',T.money=='revenue'?'Revenue':'Expense');put(bill,'Bill number',b.bill_number);put(bill,'Bill date',okDate(b.bill_date)?b.bill_date:'');put(bill,'Name printed on bill',b.seller);if(T.ref)put(bill,T.ref,b.ref);put(bill,'Payment',b.payment_mode);put(bill,'Sub-total',n(b.subtotal));put(bill,'Tax',pos(b.tax));put(bill,'Discount',pos(b.discount));put(bill,'Total',+b.total||0);put(bill,'Items',(b.items||[]).length);put(bill,'Saved anyway',b.forced?'Yes':'');put(bill,'Please check',(b.warnings||[]).map(warnText).filter(Boolean).join(' '));put(bill,'Read by',READ_BY[b.read_source]||b.read_source);put(bill,'Corrected by',b.edited_by);
+const base={};put(base,'Bill date',okDate(b.bill_date)?b.bill_date:'');put(base,'Bill name',nm);put(base,'Bill number',b.bill_number);put(base,'Kind of bill',T.s);
+const items=(b.items||[]).map(i=>{const o={...base};put(o,'Item',i.description);put(o,'Batch',i.batch_no);put(o,'Expiry',okDate(i.expiry_date)?i.expiry_date:'');put(o,'Mfg date',okDate(i.manufacture_date)?i.manufacture_date:'');put(o,'Qty',n(i.quantity));put(o,'Free',pos(i.free));put(o,'MRP',n(i.mrp));put(o,'Rate',n(i.rate));put(o,'Disc %',pos(i.disc));put(o,'GST %',pos(i.gst));put(o,'Amount',n(i.amount));return o});
+return{bill,items}}
+// rewrites this account's rows in the visible tabs from the app's records (if someone changed them by hand)
+async function rebuildSheet(){if(!ONLINE||S.sheetBusy)return;S.sheetBusy=1;S.msg='';render();
+try{await api('sync',{rows:S.bills.map(b=>({id:b.id,...sheetRows(b)}))},300000);toast(`Google Sheet rows rebuilt for your ${S.bills.length} ${S.bills.length==1?'bill':'bills'}`)}catch(e){S.msg=e.message}S.sheetBusy=0;render()}
+const sheetLinkHtml=()=>ONLINE&&CFG.SHEET_LINK?`<a class="btn" href="${esc(CFG.SHEET_LINK)}" target="_blank" rel="noopener">${ic('file-spreadsheet')}Open the Google Sheet</a>`:'';
+
+/* ===================== Excel ===================== */
+function billRows(list){return list.slice().sort(byDate).map(b=>({'Bill date':b.bill_date||'','Added on':fdt(b.created_at),'Added by':b.uploaded_by||'','Bill name':nameOf(b),'Kind of bill':TYPES[b.type]?.s||'','Money':TYPES[b.type]?.money=='revenue'?'Revenue':'Expense','Bill number':b.bill_number||'','Name printed on bill':b.seller||'','Reference':b.ref||'','Payment':b.payment_mode||'','Sub-total':b.subtotal===''||b.subtotal==null?'':+b.subtotal,'Tax':+b.tax||0,'Discount':+b.discount||0,'Total':+b.total||0,'Items':b.items.length,'Saved anyway':b.forced?'Yes':'','Please check':(b.warnings||[]).map(warnText).filter(Boolean).join(' ')}))}
+// revenue and expenses are totalled separately: adding them together would be a meaningless number
+const withTotal=rows=>{if(!rows.length)return[];const tot=(l,label)=>({'Bill date':'','Bill name':`${label} (${l.length} ${l.length==1?'bill':'bills'})`,'Tax':r2(l.reduce((s,x)=>s+x.Tax,0)),'Discount':r2(l.reduce((s,x)=>s+x.Discount,0)),'Total':r2(l.reduce((s,x)=>s+x.Total,0))}),i=rows.filter(r=>r.Money=='Revenue'),o=rows.filter(r=>r.Money=='Expense');return i.length&&o.length?[...rows,tot(o,'Total expenses'),tot(i,'Total revenue')]:[...rows,tot(rows,i.length?'Total revenue':'Total expenses')]};
+const itemRows=list=>list.slice().sort(byDate).flatMap(b=>b.items.map(i=>({'Bill date':b.bill_date||'','Added on':fdt(b.created_at),'Bill name':nameOf(b),'Kind of bill':TYPES[b.type]?.s||'','Bill number':b.bill_number||'','Item':i.description||'','Batch':i.batch_no||'','Mfg date':i.manufacture_date||'','Expiry':i.expiry_date||'','Quantity':+i.quantity||0,'Free':+i.free||0,'MRP':i.mrp===''||i.mrp==null?'':+i.mrp,'Rate':i.rate===''||i.rate==null?'':+i.rate,'Amount':+i.amount||0})));
+function addSheet(book,rows,name,head){const ws=rows.length?XLSX.utils.json_to_sheet(rows):XLSX.utils.aoa_to_sheet([head||['No data yet']]);const keys=rows.length?Object.keys(rows.reduce((a,r)=>Object.assign(a,r),{})):head||[];ws['!cols']=keys.map(k=>({wch:Math.min(48,Math.max(String(k).length,...rows.map(r=>String(r[k]??'').length))+2)}));let n=String(name).replace(/[\[\]:*?\/\\]/g,' ').slice(0,31),i=2;while(book.SheetNames.includes(n))n=String(name).slice(0,27)+' '+i++;XLSX.utils.book_append_sheet(book,ws,n)}
+function exportExcel(nameId){const stamp=isoDay(new Date());const list=nameId?S.bills.filter(b=>b.name_id==nameId):S.bills;if(!list.length&&(nameId||!S.meds.length))return toast('There are no bills to download yet');
+if(!window.XLSX){const rows=withTotal(billRows(list)),cols=Object.keys(rows[0]),csv=[cols,...rows.map(r=>cols.map(c=>r[c]??''))].map(row=>row.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\r\n'),url=URL.createObjectURL(new Blob(['﻿',csv],{type:'text/csv;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download=`rxpx-bills-${stamp}.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);return}
+const book=XLSX.utils.book_new();
+if(nameId){const n=S.names.find(x=>x.id==nameId),m=moneyOf(list);addSheet(book,[{'Bill name':n?.name||'','Bills':list.length,'Revenue':m.in,'Expenses':m.out,'Balance':m.bal,'Downloaded':fdt(new Date().toISOString())}],'Summary');addSheet(book,withTotal(billRows(list)),'Bills');addSheet(book,itemRows(list),'Items',['Item','Quantity','Amount']);XLSX.writeFile(book,`rxpx-${String(n?.name||'bills').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')}-${stamp}.xlsx`);return}
+const ym=ymOf(new Date()),mb=list.filter(b=>billMonth(b)==ym),mm=moneyOf(mb),ma=moneyOf(list);
+const summary=[{'Section':'Revenue','This month':mm.in,'All time':ma.in},{'Section':'Expenses','This month':mm.out,'All time':ma.out},{'Section':'Balance (revenue minus expenses)','This month':mm.bal,'All time':ma.bal},{'Section':'','This month':'','All time':''},...TKEYS.map(k=>({'Section':TYPES[k].s+(TYPES[k].money=='revenue'?' (revenue)':' (expense)'),'This month':sumOf(mb,[k]),'All time':sumOf(list,[k]),'Bills this month':mb.filter(b=>b.type==k).length,'Bills all time':list.filter(b=>b.type==k).length}))];
+addSheet(book,summary,'Summary');
+addSheet(book,nameStats().map(n=>({'Bill name':n.name,'Bills':n.count,'Revenue':n.m.in,'Expenses':n.m.out,'Last added':fdt(n.last.created_at)})),'Bill names',['Bill name','Bills']);
+addSheet(book,withTotal(billRows(list)),'All bills',['Bill date','Bill name','Total']);
+for(const k of TKEYS)addSheet(book,withTotal(billRows(list.filter(b=>b.type==k))),TYPES[k].s,['Bill date','Bill name','Total']);
+addSheet(book,itemRows(list),'Bill items',['Item','Quantity','Amount']);
+addSheet(book,[...S.meds].sort(byExp).map(m=>({'Medicine':m.name,'Batch':m.batch||'','Quantity':r3(+m.qty||0),'Pack size':m.pack_n||'','Manufactured':m.manufacture_date||'','Expiry':m.expiry||'','Status':BL[st(m)],'Supplier':m.supplier||''})),'Medicine stock',['Medicine','Batch','Quantity','Expiry']);
+XLSX.writeFile(book,`rxpx-bills-${stamp}.xlsx`)}
+
+/* ===================== old version's data ===================== */
+async function importOld(){const d=legacyData();if(!d||S.busy)return;S.busy=1;S.msg='';render();
+try{const medId={},meds=(d.meds||[]).map(m=>{const id=isUuid(m.id)?m.id:uid();medId[m.id]=id;return{id,name:String(m.name||'Medicine'),key:medKey(m.name),batch:normBatch(m.batch),qty:r3(+m.qty||0),pack_n:+m.pack_n||'',mrp:+m.mrp||'',rate:+m.rate||'',manufacture_date:okDate(m.manufacture_date)?m.manufacture_date:'',expiry:okDate(m.expiry)?m.expiry:'',supplier:m.supplier||''}});
+const names=[],bills=[];let skipped=0;
+for(const o of d.bills||[]){if(!TYPES[o.type]||!(+o.total>0)){skipped++;continue}const nm=String(o.party||o.file?.name||'Imported bill').trim();let n=names.find(x=>lc(x.name)==lc(nm))||S.names.find(x=>lc(x.name)==lc(nm));if(!n){n={id:uid(),name:nm,type:o.type};names.push(n)}else if(!names.includes(n))names.push(n);
+bills.push({id:isUuid(o.id)?o.id:uid(),name_id:n.id,type:o.type,bill_number:String(o.bill_number||''),bill_date:okDate(o.bill_date)?o.bill_date:'',seller:'',ref:String(o.ref||''),payment_mode:String(o.mode||''),subtotal:'',tax:+o.tax||0,discount:+o.disc||0,total:r2(+o.total),items:(o.items||[]).map(i=>({description:String(i.description||''),batch_no:normBatch(i.batch_no),manufacture_date:okDate(i.manufacture_date)?i.manufacture_date:'',expiry_date:okDate(i.expiry_date)?i.expiry_date:'',quantity:num(i.quantity),free:num(i.free),pack:i.pack||'',pack_n:+i.pack_n||'',mrp:num(i.mrp),rate:num(i.rate),disc:num(i.disc),gst:num(i.gst),amount:num(i.amount)})).filter(i=>i.description),warnings:['not_read:imported from the old version'],stock_movements:(o.stock_movements||[]).map(m=>({...m,lot:medId[m.lot]||m.lot})),file:null,file_hash:o.file?.hash||'',read_source:'old version',raw_text:String(o.notes||'').slice(0,20000),forced:false,uploaded_by:String(o.by||''),edited_by:'',created_at:o.at||new Date().toISOString(),updated_at:new Date().toISOString()})}
+const n=await Store.importAll(S.user,names,bills,meds);LS.del(LEGACY_KEY);await loadData();S.busy=0;render();toast(`Moved ${n} bills into your account${skipped?` (${skipped} without a type were left out)`:''}`)}
+catch(e){S.busy=0;S.msg=e.message||'Could not move the old bills.';render()}}
+
+/* ===================== actions ===================== */
+function clearUp(){for(const p of S.up?.pages||[])if(p.url)URL.revokeObjectURL(p.url);S.up=null}
+function addFile(fl){const kind=fileKind(fl);if(!kind){S.msg='Please choose a bill photo, PDF, Excel workbook, or CSV file.';return render()}
+if(fl.size>(kind=='image'?25:20)*1024*1024){S.msg=`That file is larger than ${kind=='image'?25:20} MB. Please choose a smaller one.`;return render()}
+clearUp();S.msg='';S.up={kind,name:fl.name||'photo.jpg',pages:[{file:fl,url:kind=='image'?URL.createObjectURL(fl):'',rot:0}],hash:''};render();warmReader()}
+async function afterLogin(u){S.user=u;S.auth={mode:'in',name:'',email:'',pw:'',pw2:'',code:''};S.showPw=0;S.info='';S.msg='';S.view='boot';render();await loadData();S.busy=0;S.flowName='';S.flowNameId='';S.selectedName='';S.flow='choose';go(savedNames().length?'home':'new')}
+async function loadOriginal(){const b=S.bills.find(x=>x.id==S.detail);if(!b||!b.file?.stored||b.id in S.img)return;S.img[b.id]=null;const list=await Store.fileUrls(S.user,b).catch(()=>[]);S.img[b.id]=list;if(S.view=='detail'&&S.detail==b.id)render()}
+const A={
+mode(d){S.auth.mode=d.m;S.msg='';S.info='';render()},eye(){S.showPw=!S.showPw;render()},
+async auth(){const a=S.auth,up=a.mode=='up',email=a.email.trim().toLowerCase();if(S.busy)return;S.msg='';S.info='';
+if(up&&!a.name.trim())return S.msg='Please tell us your full name.',render();if(!/^\S+@\S+\.\S+$/.test(email))return S.msg='Please enter a valid email address.',render();if(a.pw.length<6)return S.msg='Your password needs at least 6 characters.',render();if(up&&a.pw!=a.pw2)return S.msg='The two passwords do not match.',render();
+S.busy=1;render();
+try{if(up){const r=await Auth.signUp(a.name.trim(),email,a.pw,String(a.code||'').trim());await afterLogin(r.user)}else await afterLogin(await Auth.signIn(email,a.pw))}catch(e){S.busy=0;S.msg=e.message||'Could not sign in.';if(/hospital code/i.test(S.msg))S.server={...(S.server||{}),signupCode:true};render()}},
+async retryLoad(){S.loadErr='';render();await loadData();render()},
+go(d){if(d.v=='new'){S.view='new';S.flow='choose';S.msg='';return render()}go(d.v)},
+newbill(){S.type='';S.flow='choose';S.flowName='';S.flowNameId='';S.selectedName='';clearUp();go('new')},
+backChoose(){S.flow='choose';S.msg='';render()},
+backName(){clearUp();go('new')},
+newName(){S.flow='newName';S.flowName='';S.msg='';render();warmReader();const i=$('#partyName');i&&i.focus()},
+chooseExisting(){S.flow='existingName';S.selectedName='';S.msg='';render();warmReader()},selectName(d){S.selectedName=d.name;render()},
+continueName(){const n=S.flowName.trim();if(!n)return S.msg='Enter a name to continue.',render();const ex=S.names.find(x=>lc(x.name)==lc(n));S.flowName=ex?ex.name:n;S.flowNameId=ex?.id||'';S.type='';go('upload')},
+continueExisting(){const n=S.names.find(x=>x.name==S.selectedName&&S.bills.some(b=>b.name_id==x.id));if(!n)return S.msg='Choose a saved name to continue.',render();S.flowName=n.name;S.flowNameId=n.id;S.type='';go('upload')},
+rotate(){const p=S.up?.pages[0];if(p){p.rot=((p.rot||0)+1)%4;render()}},
+rmfile(){clearUp();render()},chooseAgain(){clearUp();S.run=0;S.bad=0;S.dup=null;S.draft=null;S.retrySave=false;go('upload')},
+// "Try again": a bill that was read but could not be saved is saved again without reading it a second time
+submit(){if(S.retrySave&&S.draft)return autoSave(S.forced);startRead(false)},
+// "Upload anyway": the same bill is saved again on purpose
+readAnyway(){if(S.draft){S.bad=0;S.dup=null;return afterRead(true)}startRead(true)},
+pickType(d){S.type=d.t;render()},cancelKind(){S.draft=null;go('upload')},saveKind(){if(TYPES[S.type])autoSave(S.forced)},
+manual(){S.run=0;S.bad=0;S.draft=null;S.retrySave=false;S.edit={mode:'manual',id:null,name:S.flowName.trim(),name_id:S.flowNameId,type:usualType(S.flowName),bill_number:'',bill_date:isoDay(new Date()),payment_mode:'',total:'',tax:'',discount:'',subtotal:'',seller:'',ref:'',items:[blankItem()],warnings:[],read_source:'typed',raw_text:'',file_hash:S.up?.hash||'',dupAck:false};S.msg='';go('edit')},
+addItem(){S.edit.items.push(blankItem());render()},
+rmItem(d){S.edit.items.splice(+d.i,1);render()},
+saveEdit(){saveBill()},
+cancelEdit(){const m=S.edit?.mode;S.edit=null;go(m=='edit'?'detail':'upload')},
+open(d){S.detail=d.id;S.msg='';go('detail')},ask(){S.ask=1;S.msg='';render()},noask(){S.ask=0;S.msg='';render()},
+edit(){const b=S.bills.find(x=>x.id==S.detail);if(!b)return go('home');S.edit={mode:'edit',id:b.id,name:nameOf(b),name_id:b.name_id,type:TYPES[b.type]?b.type:'',bill_number:b.bill_number||'',bill_date:b.bill_date||'',payment_mode:b.payment_mode||'',total:str(b.total),tax:str(b.tax),discount:str(b.discount),subtotal:str(b.subtotal),seller:b.seller||'',ref:b.ref||'',items:b.items.length?b.items.map(i=>editItem({...i,unclear:false})):[blankItem()],warnings:[],read_source:b.read_source||'',dupAck:false};go('edit')},
+async del(){const b=S.bills.find(x=>x.id==S.detail);if(!b||S.busy)return;const medsCopy=S.meds.map(m=>({...m})),issue=reverseStock(b,medsCopy);if(issue){S.msg=issue;return render()}const drop=emptyLots(b,medsCopy),changed=changedMeds(medsCopy,drop);S.busy=1;render();
+try{await Store.deleteBill(S.user,b,changed,drop)}catch(e){S.busy=0;S.msg=e.message;return render()}
+const next=mergeDelete(S,b,changed,drop);S.names=next.names;S.bills=next.bills;S.meds=next.meds;S.busy=0;if(S.last?.id==b.id)setLast(null);go('home');toast('Bill deleted and stock updated')},
+mf(d){S.mf=d.f;render()},rep(d){S.rep=d.r;render()},repgo(d){S.rep=d.r;go('reports')},export(){exportExcel()},
+addmed(){S.sheet=1;S.msg='';render()},closemed(){S.sheet=0;S.msg='';render()},
+async savemed(){const fm=S.mform,n=fm.name.trim(),q=num(fm.qty);if(S.busy)return;if(!n||!(q>0))return S.msg='Please add the medicine name and a quantity.',render();
+const k=medKey(n),bt=normBatch(fm.batch),ex=S.meds.find(x=>sameMed(keyOf(x),k)&&normBatch(x.batch)==bt);const m=ex?{...ex,qty:r3((+ex.qty||0)+q),manufacture_date:fm.manufacture_date||ex.manufacture_date,expiry:fm.expiry||ex.expiry}:{id:uid(),name:n,key:k,batch:bt,qty:q,pack_n:'',mrp:'',rate:'',manufacture_date:okDate(fm.manufacture_date)?fm.manufacture_date:'',expiry:okDate(fm.expiry)?fm.expiry:'',supplier:fm.supplier.trim()};
+S.busy=1;render();try{await Store.saveMeds(S.user,[m])}catch(e){S.busy=0;S.msg=e.message;return render()}S.meds=mergeMeds(S.meds,[m]);S.busy=0;S.mform={name:'',batch:'',qty:'',manufacture_date:'',expiry:'',supplier:''};S.sheet=0;S.msg='';render();toast('Medicine added')},
+importOld(){importOld()},sheetSync(){rebuildSheet()},
+async out(){await Auth.signOut();resetSession();S.auth={mode:'in',name:'',email:'',pw:'',pw2:'',code:''};go('login')}};
+
+/* ===================== render and events ===================== */
+let lastV='';
+function go(v){S.view=v;S.msg='';S.ask=0;render();scrollTo(0,0)}
+function saveFlow(){try{if(S.user&&['new','upload'].includes(S.view))sessionStorage.setItem(FLOW_KEY,JSON.stringify({view:S.view,flow:S.flow,flowName:S.flowName,flowNameId:S.flowNameId,selectedName:S.selectedName,uid:S.user.id}));else if(!['proc','kind','edit'].includes(S.view))sessionStorage.removeItem(FLOW_KEY)}catch{}}
+function render(){clearDashboardCharts();const V={boot,login,home,new:chooser,upload,proc,kind,detail,edit:editView,meds,reports,profile};
+if(!S.user&&!['boot','login'].includes(S.view))S.view='login';if(S.view=='edit'&&!S.edit||S.view=='kind'&&!S.draft)S.view='home';if(!V[S.view])S.view='home';
+const app=$('#app');app.innerHTML=V[S.view]();if(lastV!=S.view){(app.querySelector('.flow,.main')||app).classList.add('in');lastV=S.view}window.lucide&&lucide.createIcons();if(S.view=='home')drawDashboardCharts();if(S.view=='detail')loadOriginal();saveFlow()}
+document.addEventListener('click',e=>{const a=e.target.closest('[data-a]');if(!a||a.disabled||!A[a.dataset.a])return;e.preventDefault();A[a.dataset.a](a.dataset)});
+document.addEventListener('submit',e=>{e.preventDefault();const f=e.target.dataset.f;if(f&&A[f])A[f]()});
+document.addEventListener('input',e=>{const k=e.target.dataset.k;if(!k)return;const p=k.split('.');let o=S;for(let j=0;j<p.length-1;j++)o=o[p[j]];o[p[p.length-1]]=e.target.value;
+if(k=='flowName'){const button=$('[data-a="continueName"]');if(button)button.disabled=!e.target.value.trim();saveFlow()}
+if(e.target.dataset.re)render();
+if(k=='f.mq'){$('#ml').innerHTML=medList();window.lucide&&lucide.createIcons()}if(k=='f.bq'&&$('#bl')){$('#bl').innerHTML=billsHtml();window.lucide&&lucide.createIcons()}});
+document.addEventListener('keydown',e=>{if(e.key=='Enter'&&e.target.id=='partyName'){e.preventDefault();A.continueName();return}if(e.key!='Escape')return;if(S.sheet){S.sheet=0;render()}else if(S.ask){S.ask=0;render()}});
+document.addEventListener('change',e=>{const el=e.target;if(el.tagName=='SELECT')return;if(el.type!='file'||!el.files||!el.files[0])return;const fl=el.files[0];el.value='';addFile(fl)});
+document.addEventListener('dragover',e=>{if(e.target.closest?.('#drop')){e.preventDefault();$('#drop').classList.add('over')}});
+document.addEventListener('dragleave',()=>{$('#drop')?.classList.remove('over')});
+document.addEventListener('drop',e=>{if(!e.target.closest?.('#drop'))return;e.preventDefault();const fl=e.dataTransfer.files[0];if(fl)addFile(fl)});
+window.addEventListener('beforeunload',e=>{if(S.view=='proc'&&(S.run||S.busy)||S.view=='edit'&&S.busy){e.preventDefault();e.returnValue=''}});
+
+(async function start(){render();
+// does sign-up need a hospital code, and is the AI reader set up?
+if(ONLINE)fetch(CFG.SHEET_URL).then(r=>r.json()).then(c=>{S.server=c;if(S.view=='login')render()}).catch(()=>{});
+let u=null;try{u=await Auth.restore()}catch{}
+if(!u){S.view='login';return render()}
+S.user=u;await loadData();S.flow='choose';S.view=savedNames().length?'home':'new';
+try{const fl=JSON.parse(sessionStorage.getItem(FLOW_KEY)||'null');if(fl&&fl.uid==u.id&&['new','upload'].includes(fl.view)){S.view=fl.view;S.flow=fl.flow||'choose';S.flowName=fl.flowName||'';S.flowNameId=S.names.some(n=>n.id==fl.flowNameId)?fl.flowNameId:'';S.selectedName=fl.selectedName||'';if(S.view=='upload'&&!S.flowName)S.view='new'}}catch{}
+render()})();
+</script></body></html>

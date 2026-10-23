@@ -1,10 +1,1 @@
-/node_modules/
-/dist/
-/.rxpx-backups/
-/tests/artifacts/
-.env
-.env.*
-!.env.example
-*.log
-/supabase/.temp/
-/supabase/.branches/
+.claude/
