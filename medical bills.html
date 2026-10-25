@@ -106,6 +106,86 @@ select.inp{appearance:none;-webkit-appearance:none;background:var(--cd) url("dat
 .warn div{line-height:1.45}
 .opt .ib i,.opt .ib svg{width:22px;height:22px}
 .rtab td{white-space:normal;vertical-align:top}.rtab td span{display:block}.rtab tr[data-a]{cursor:pointer}.rtab th.r,.rtab td.r{text-align:right;white-space:nowrap}
+
+/* Dashboard: the month on one dark card with the RxPx sun dots, four numbers you can tap,
+   then six-month bars, where the money came from and went, and the latest bills.
+   Orange = money in, ink = money out, amber = needs checking, red = expiring. */
+.dhead{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.dhead h1{font-size:26px;text-wrap:balance}
+.hero{position:relative;overflow:hidden;isolation:isolate;background:var(--pr);color:#fff;border-radius:24px;padding:20px 20px 18px}
+.hero-sun{position:absolute;z-index:-1;right:-34px;top:-30px;width:210px;opacity:.85;pointer-events:none}
+.hero-sun svg{display:block;width:100%;height:auto}
+.hero-m{font-size:15px;color:rgb(255 255 255/.72)}
+.hero-net{font:800 clamp(36px,11vw,50px)/1.05 Poppins,'DM Sans',system-ui,sans-serif;letter-spacing:-.03em;margin-top:8px}
+.hero-net.neg{color:#FFB27A}
+.hero-cap{font-size:15px;color:rgb(255 255 255/.72);margin-top:4px}
+.hero-split{display:flex;gap:3px;height:10px;margin-top:20px;border-radius:99px;overflow:hidden;background:rgb(255 255 255/.14);transform-origin:left;animation:grow .7s cubic-bezier(.2,.7,.2,1) both}
+.hero-split i{display:block;min-width:6px}
+.hero-split .seg-in{background:var(--ac)}
+.hero-split .seg-out{background:#fff}
+@keyframes grow{from{transform:scaleX(0)}}
+.hero-io{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
+.hero-io div{display:flex;flex-direction:column;gap:2px;min-width:0}
+.hero-io span{font-size:13px;color:rgb(255 255 255/.75)}
+.hero-io b{font:700 22px/1.2 Poppins,'DM Sans',system-ui,sans-serif;overflow-wrap:anywhere}
+.k{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:0;flex:none}
+.k-in{background:var(--ac)}
+.k-out{background:var(--pr)}
+.hero .k-out{background:#fff}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.dt{display:flex;flex-direction:column;align-items:flex-start;gap:6px;padding:14px;min-height:112px;width:100%;border-radius:18px;background:var(--cd);border:1px solid var(--bd);text-align:left}
+.dt .ib{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;background:hsl(var(--accent)/.12);color:var(--act);margin-bottom:4px}
+.dt b{font:700 28px/1 Poppins,'DM Sans',system-ui,sans-serif;font-variant-numeric:tabular-nums}
+.dt span:last-child{font-size:14px;line-height:1.3;color:var(--mu)}
+.dt.is-amber{border-color:hsl(var(--warning)/.45);background:hsl(var(--warning)/.08)}
+.dt.is-amber .ib{background:hsl(var(--warning)/.18);color:var(--wn)}
+.dt.is-red{border-color:hsl(var(--danger)/.35);background:hsl(var(--danger)/.06)}
+.dt.is-red .ib{background:hsl(var(--danger)/.12);color:var(--er)}
+.dt:hover{border-color:var(--ac)}
+.saved{display:flex;align-items:center;gap:2px;padding:4px;border-radius:18px;background:hsl(var(--success)/.07);border:1px solid hsl(var(--success)/.25)}
+.sv-main{flex:1;min-width:0;display:flex;align-items:center;gap:12px;padding:8px;border-radius:14px;text-align:left}
+.sv-t{flex:1;min-width:0;display:flex;flex-direction:column}
+.sv-go{color:var(--mu)}
+.saved.chk{background:hsl(var(--warning)/.1);border-color:hsl(var(--warning)/.4)}
+.saved .ib{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:var(--cd);color:var(--ok);flex:none}
+.saved.chk .ib{color:var(--wn)}
+.saved .x{width:40px;height:40px;display:grid;place-items:center;border-radius:50%;color:var(--mu);flex:none}
+.dgrid{display:grid;gap:12px}
+.dcard{padding:16px;border-radius:20px}
+.dcard>b,.dcard .sp>b,.recent .rh b{font:600 16px/1.3 Poppins,'DM Sans',system-ui,sans-serif}
+.keys{display:flex;gap:12px;font-size:12px;color:var(--mu);white-space:nowrap}
+.dcard{display:flex;flex-direction:column}
+.dplot{position:relative;height:190px;margin-top:12px}
+.dplot canvas{position:absolute;left:0;top:0}
+.split{margin-top:16px}
+.split .sp span{font-size:14px;color:var(--mu)}
+.sbar{display:flex;gap:3px;height:12px;margin-top:8px;border-radius:99px;overflow:hidden;background:hsl(var(--border)/.6)}
+.sbar i{display:block;min-width:6px}
+.slegend{display:flex;flex-wrap:wrap;gap:2px 16px;margin-top:6px}
+.slegend button{display:inline-flex;align-items:center;min-height:32px;font-size:13px}
+.slegend b{margin-left:6px;font-weight:600}
+.t-pharmacy_sales{background:var(--ac)}
+.t-patient{background:#F9A963}
+.t-lab{background:var(--act)}
+.t-medicine_purchase{background:var(--pr)}
+.t-expense{background:#9A9A9A}
+.recent{padding:6px 0}
+.recent .rh{display:flex;justify-content:space-between;align-items:center;padding:4px 16px}
+.recent .rh .lnk{min-height:40px;font-size:14px}
+.bl{display:flex;align-items:center;gap:12px;width:100%;padding:10px 16px;text-align:left;border-top:1px solid hsl(var(--border)/.8)}
+.bl .ib{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;flex:none;background:hsl(var(--border)/.6);color:var(--mu)}
+.bl .ib.ti-in{background:hsl(var(--accent)/.12);color:var(--act)}
+.bl .ib.ti-out{background:hsl(var(--primary)/.07);color:var(--pr)}
+.bl-t{flex:1;min-width:0;display:flex;flex-direction:column}
+.bl-t b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bl-a{display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex:none}
+.bl-a b.up{color:var(--act)}
+.bl:hover b{text-decoration:underline;text-decoration-color:var(--ac)}
+.dempty{display:flex;flex-direction:column;align-items:center;text-align:center;gap:8px;padding:28px 20px}
+.dempty .ib{width:52px;height:52px;border-radius:16px;display:grid;place-items:center;background:hsl(var(--accent)/.12);color:var(--act);margin-bottom:4px}
+.dempty .btn{margin-top:8px}
+@media(min-width:768px){.tiles{grid-template-columns:repeat(4,1fr)}.dt{min-height:132px}}
+@media(min-width:1180px){.dgrid{grid-template-columns:minmax(0,1.35fr) minmax(0,1fr)}.dgrid .dplot{flex:1 1 190px;height:auto;min-height:190px}}
 </style></head>
 <body><div id="app"></div><div id="toast"></div>
 <script src="https://cdn.jsdelivr.net/npm/lucide@0.469.0/dist/umd/lucide.min.js"></script>
@@ -972,13 +1052,13 @@ medicine_purchase:{t:"Medicine Purchase Bill",s:"Medicine purchases",q:"Medicine
 pharmacy_sales:{t:"Pharmacy Sales Bill",s:"Pharmacy sales",q:"Medicines sold to a patient",i:"pill",party:"Patient",ref:"Patient ID",med:1,money:'revenue'},
 patient:{t:"Patient Bill",s:"Patient bills",q:"Hospital charges for a patient (room, doctor, nursing)",i:"stethoscope",party:"Patient",ref:"Patient ID",money:'revenue'},
 lab:{t:"Lab and Diagnostics Bill",s:"Lab bills",q:"Lab test or scan bill",i:"flask-conical",party:"Patient",ref:"Patient ID",money:'revenue'},
-expense:{t:"Other Expense Bill",s:"Other expenses",q:"Other expense (electricity, repairs, supplies)",i:"receipt",party:"Vendor",ref:"Vendor GSTIN",money:'expense'}};
+expense:{t:"Other Expense Bill",s:"Other expenses",q:"Other expense (electricity, repairs, supplies)",i:"receipt-indian-rupee",party:"Vendor",ref:"Vendor GSTIN",money:'expense'}};
 const TKEYS=Object.keys(TYPES),EXP_T=['medicine_purchase','expense'],REV_T=['pharmacy_sales','patient','lab'];
 const S={user:null,view:'login',mode:'in',auth:{name:'',email:'',pw:'',pw2:''},pw:0,msg:'',bills:[],meds:[],mf:'all',f:{mq:'',bq:''},type:'general',flow:'choose',partyName:'',selectedName:'',file:null,draft:null,detail:null,ask:0,sheet:0,mform:{name:'',batch:'',qty:'',manufacture_date:'',expiry:'',supplier:''},rep:'all',run:0,step:0,bad:0,dup:null,lastUpload:null,charts:[],edit:null,img:{}};
 const $=s=>document.querySelector(s),touch=matchMedia('(pointer:coarse)').matches;
 const ic=(n,c='')=>`<i data-lucide="${n}" class="${c}"></i>`;
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const inr=n=>CFG.CURRENCY+new Intl.NumberFormat('en-IN',{maximumFractionDigits:2}).format(+n||0);
+const inr=n=>{const v=+n||0;return CFG.CURRENCY+new Intl.NumberFormat('en-IN',{minimumFractionDigits:Number.isInteger(r2(v))?0:2,maximumFractionDigits:2}).format(v)};
 const okDate=d=>/^\d{4}-\d{2}-\d{2}$/.test(d||'')&&!Number.isNaN(new Date(d+'T00:00').valueOf());
 const fd=d=>okDate(d)?new Date(d+'T00:00').toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}):'Not set';
 const uid=()=>crypto.randomUUID?crypto.randomUUID():String(Date.now())+Math.random().toString(16).slice(2);
@@ -1041,29 +1121,41 @@ ${S.msg?`<p class="err">${esc(S.msg)}</p>`:''}
 
 const WARN_TEXT={no_date:'Bill date was not found on the bill.',no_number:'Bill number was not found on the bill.',total_calculated:'Total was not found, so it was added up from the items.',sum_mismatch:'The items do not add up exactly to the bill total.',items_missing:'Some items on the bill may not have been read.',total_mismatch:'The total looks unusual.',no_expiry:'{n} medicine(s) have no expiry date.',no_qty:'{n} item(s) have no quantity.'};
 const warnText=w=>{const[k,n]=String(w).split(':');return(WARN_TEXT[k]||'').replace('{n}',n||'')};
-function lastCard(){const L=S.lastUpload;if(!L)return'';const b=S.bills.find(x=>x.id==L.id);const ws=(L.warnings||[]).map(warnText).filter(Boolean);
-return `<section class="card stack lastcard"><div class="sp"><b>${ic('circle-check-big','okc')} Last bill saved</b><span class="mu sm">${esc(typeLabel(L.type))}</span></div><span>${esc(L.impact)}</span>${L.shortage?`<span class="err" style="margin:0">${esc(L.shortage)}</span>`:''}${ws.length?`<div class="warn">${ic('triangle-alert')}<div><b>Please check:</b> ${ws.map(esc).join(' ')}</div></div>`:''}${b?`<button class="btn" data-a="open" data-id="${b.id}">${ic('file-search')}Check what was read</button>`:''}</section>`}
+function lastCard(){const L=S.lastUpload;if(!L)return'';const b=S.bills.find(x=>x.id==L.id);if(!b)return'';const n=(b.warnings||[]).length;
+return `<section class="saved${n?' chk':''}"><button class="sv-main" data-a="open" data-id="${b.id}"><span class="ib">${ic(n?'triangle-alert':'circle-check-big')}</span><span class="sv-t"><b>${n?'Please check this bill':'Bill saved'}</b><span class="mu sm">${esc(L.impact)}</span>${L.shortage?`<span class="sm err" style="margin:2px 0 0">${esc(L.shortage)}</span>`:''}</span>${ic('chevron-right','sv-go')}</button><button class="x" data-a="dismiss" aria-label="Hide this note">${ic('x')}</button></section>`}
 
-function home(){const ym=thisMonth(),mb=S.bills.filter(b=>billMonth(b)==ym),purchases=sumOf(mb,['medicine_purchase']),otherExpenses=sumOf(mb,['expense']),expenses=r2(purchases+otherExpenses),revenue=sumOf(mb,REV_T),unclassified=S.bills.filter(b=>!TYPES[b.type]),att=S.meds.filter(m=>st(m)!='good'&&m.qty>0).sort(byExp),h=new Date().getHours(),
-stat=(l,v,sub)=>`<div class="card stat"><div class="mu sm">${l}</div><div class="v">${v}</div>${sub?`<div class="mu sm">${sub}</div>`:''}</div>`;
-return shell('home',`<div class="sp"><div><h1>${h<12?'Good morning':h<17?'Good afternoon':'Good evening'}, ${esc(S.user.name.split(' ')[0])}</h1><div class="mu sm"><span class="live"></span>${esc(CFG.HOSPITAL_NAME)}, live</div></div><button class="av" data-a="go" data-v="profile" aria-label="Profile">${esc(S.user.name[0].toUpperCase())}</button></div>
+const inr0=n=>CFG.CURRENCY+new Intl.NumberFormat('en-IN',{maximumFractionDigits:0}).format(Math.round(+n||0));
+// the logo's sun-dot rays, large, for the month card
+const HERO_SUN=(()=>{let s='<svg viewBox="0 0 120 66" aria-hidden="true"><circle cx="60" cy="60" r="8" fill="#F47B20"/>';[[17,2.7],[28,2.4],[39,2.1],[50,1.8]].forEach(([r,z],k)=>{for(let a=-172;a<=-8;a+=18){const t=a*Math.PI/180;s+=`<circle cx="${(60+r*Math.cos(t)*1.05).toFixed(1)}" cy="${(60+r*Math.sin(t)).toFixed(1)}" r="${z}" fill="#F47B20" opacity="${(.95-k*.2).toFixed(2)}"/>`}});return s+'</svg>'})();
+const TYPE_TONE={pharmacy_sales:'in',patient:'in',lab:'in',medicine_purchase:'out',expense:'out'};
+const billLine=b=>{const T=TYPES[b.type],up=T?.money=='revenue',w=(b.warnings||[]).length,when=b.bill_date?fd(b.bill_date):new Date(b.at).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
+return `<button class="bl" data-a="open" data-id="${b.id}"><span class="ib ti-${TYPE_TONE[b.type]||'none'}">${ic(T?.i||'file-question')}</span><span class="bl-t"><b>${esc(b.party||b.file?.name||'Scanned bill')}</b><span class="mu sm">${esc(T?.s||'No type yet')}</span></span><span class="bl-a"><b class="num${up?' up':''}">${T?(up?'+':'−'):''}${inr(b.total)}</b>${w?'<span class="b soon">Check</span>':`<span class="mu sm">${when}</span>`}</span></button>`};
+function home(){const now=new Date(),ym=thisMonth(),mb=S.bills.filter(b=>billMonth(b)==ym),inn=sumOf(mb,REV_T),out=sumOf(mb,EXP_T),net=r2(inn-out),neg=Math.round(net)<0,
+expiring=S.meds.filter(m=>st(m)!='good'&&m.qty>0).sort(byExp),check=S.bills.filter(b=>(b.warnings||[]).length),inStock=new Set(S.meds.filter(m=>m.qty>0).map(keyOf)).size,h=now.getHours(),
+month=now.toLocaleDateString('en-IN',{month:'long'}),day=now.toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'}),
+tile=(icon,n,label,act,tone)=>`<button class="dt${n&&tone?' is-'+tone:''}" ${act}><span class="ib">${ic(icon)}</span><b>${n}</b><span>${label}</span></button>`,
+split=(label,keys,total,none)=>{const parts=keys.map(k=>({k,v:sumOf(mb,[k])})).filter(p=>p.v>0);return `<div class="split"><div class="sp"><span>${label}</span><b class="num">${inr0(total)}</b></div>${total>0?`<div class="sbar" role="img" aria-label="${label}: ${parts.map(p=>TYPES[p.k].s+' '+inr(p.v)).join(', ')}">${parts.map(p=>`<i class="t-${p.k}" style="flex:${p.v}"></i>`).join('')}</div><div class="slegend">${parts.map(p=>`<button data-a="repgo" data-r="${p.k}"><i class="k t-${p.k}"></i>${TYPES[p.k].s}<b class="num">${inr0(p.v)}</b></button>`).join('')}</div>`:`<p class="mu sm" style="margin-top:6px">${none}</p>`}</div>`};
+return shell('home',`<header class="dhead"><div><h1>${h<12?'Good morning':h<17?'Good afternoon':'Good evening'}, ${esc(S.user.name.split(' ')[0])}</h1><div class="mu sm">${day}</div></div><button class="av" data-a="go" data-v="profile" aria-label="Profile">${esc((S.user.name[0]||'?').toUpperCase())}</button></header>
 ${lastCard()}
-<section class="chart-grid"><div class="card chart-card"><div class="chart-title">Revenue and expenses</div><div class="chart-subtitle">Six-month movement from saved bills</div><div class="chart-plot"><canvas id="cashflowChart" aria-label="Revenue and expenses by month"></canvas></div></div><div class="card chart-card"><div class="chart-title">Expense mix</div><div class="chart-subtitle">Where this month's expenses come from</div>${expenses?`<div class="chart-plot donut"><canvas id="expenseChart" aria-label="Expense categories this month"></canvas></div><div id="expenseLegend" class="chart-legend"></div>`:`<div class="chart-plot donut"><div class="chart-empty">Expense categories appear after bills are saved.</div></div>`}</div></section>
-<div class="g2">${stat('Expenses this month',inr(expenses),'All time: '+inr(sumOf(S.bills,EXP_T)))}${stat('Revenue this month',inr(revenue),'All time: '+inr(sumOf(S.bills,REV_T)))}${stat('Bills this month',mb.length)}${stat('Stock units',new Intl.NumberFormat('en-IN',{maximumFractionDigits:1}).format(S.meds.reduce((sum,m)=>sum+Math.max(0,+m.qty||0),0)))}${stat('Medicine types',new Set(S.meds.filter(m=>m.qty>0).map(keyOf)).size)}${stat('Needs attention',att.length)}${stat('Low stock items',S.meds.filter(m=>m.qty<=CFG.LOW_STOCK_LIMIT).length)}${unclassified.length?stat('Unclassified bills',unclassified.length,'Open a bill and choose its type'):''}</div>
-<section><b>Bills by type this month</b>${TKEYS.map(k=>{const l=mb.filter(b=>b.type==k);return`<button class="row" data-a="repgo" data-r="${k}"><div><b>${TYPES[k].s}</b><span class="mu sm">${l.length} ${l.length==1?'bill':'bills'} · ${TYPES[k].money=='expense'?'expense':'revenue'}</span></div><b class="num">${inr(sumOf(l))}</b></button>`}).join('')}</section>
-<section><b>Expenses breakdown</b><div class="row"><div><b>Medicine purchases</b><span class="mu sm">Supplier bills this month</span></div><b class="num">${inr(purchases)}</b></div><div class="row"><div><b>Other expenses</b><span class="mu sm">Expense bills this month</span></div><b class="num">${inr(otherExpenses)}</b></div><div class="row"><div><b>Total expenses</b></div><b class="num">${inr(expenses)}</b></div></section>
-<section><div class="sp"><b>Needs attention</b>${att.length?`<button class="lnk" data-a="go" data-v="meds">View all</button>`:''}</div>${att.length?att.slice(0,5).map(m=>`<div class="row"><div><b>${esc(m.name)}</b><span class="mu sm">Expires ${fd(m.expiry)}</span></div>${badge(m).split(' <')[0]}</div>`).join(''):`<div class="card mu" style="margin-top:8px">Nothing needs attention right now. Medicines that expire soon will show up here.</div>`}</section>
-<section><b>Your bills</b>
-${S.bills.length?`<label class="fl"><span class="mu sm">Search by name or bill number</span><input class="inp" data-k="f.bq" value="${esc(S.f.bq)}" type="search"></label>`:''}<div id="bl">${billsHtml()}</div></section>`)}
+${S.bills.length?'':`<section class="card dempty"><span class="ib">${ic('file-plus-2')}</span><b>Add your first bill</b><p class="mu sm">Take a photo of a bill. The money and medicine stock update here by themselves.</p><button class="btn pri" data-a="newbill">${ic('camera')}Add a bill</button></section>`}
+<section class="hero"><div class="hero-sun">${HERO_SUN}</div><div class="hero-m">${month} so far</div><div class="hero-net num${neg?' neg':''}">${neg?'−':''}${inr0(Math.abs(net))}</div><div class="hero-cap">${neg?'more went out than came in':'left after expenses'}</div>
+<div class="hero-split" role="img" aria-label="Came in ${inr(inn)}, went out ${inr(out)}">${inn>0?`<i class="seg-in" style="flex:${inn}"></i>`:''}${out>0?`<i class="seg-out" style="flex:${out}"></i>`:''}</div>
+<div class="hero-io"><div><span><i class="k k-in"></i>Came in</span><b class="num">${inr0(inn)}</b></div><div><span><i class="k k-out"></i>Went out</span><b class="num">${inr0(out)}</b></div></div></section>
+${S.bills.length?`<section class="tiles">${tile('receipt-indian-rupee',mb.length,mb.length==1?'Bill this month':'Bills this month','data-a="repgo" data-r="all"')}${tile('pill',inStock,inStock==1?'Medicine in stock':'Medicines in stock','data-a="go" data-v="meds"')}${tile('calendar-clock',expiring.length,'Expiring or expired',`data-a="medgo" data-f="${expiring.some(m=>st(m)=='soon')?'soon':'exp'}"`,'red')}${tile('file-warning',check.length,check.length==1?'Bill to check':'Bills to check',check.length?`data-a="open" data-id="${check[0].id}"`:'data-a="repgo" data-r="all"','amber')}</section>`:''}
+${S.bills.length?`<div class="dgrid"><section class="card dcard"><div class="sp"><b>Last 6 months</b><span class="keys"><span><i class="k k-in"></i>Came in</span><span><i class="k k-out"></i>Went out</span></span></div><div class="dplot"><canvas id="cashflowChart" aria-label="Money that came in and went out in the last six months"></canvas></div></section>
+<section class="card dcard"><b>${month}</b>${split('Came in',REV_T,inn,'No money in yet this month')}${split('Went out',EXP_T,out,'No expenses yet this month')}</section></div>
+<section class="card recent"><div class="rh"><b>Latest bills</b><button class="lnk" data-a="repgo" data-r="all">See all bills</button></div>${S.bills.slice(0,4).map(billLine).join('')}</section>`:''}`)}
 function billsHtml(){const q=S.f.bq.trim().toLowerCase(),list=S.bills.filter(b=>!q||`${b.party||''} ${b.bill_number||''} ${b.file?.name||''}`.toLowerCase().includes(q));
 if(list.length)return list.map(billRow).join('');if(q)return`<div class="card mu" style="text-align:center;padding:24px 20px;margin-top:8px">No bills match "${esc(S.f.bq)}".</div>`;
 return`<div class="card stack" style="text-align:center;padding:32px 20px;margin-top:8px"><div>${ic('file-plus-2')}</div><div><b>No bills here yet</b><p class="mu sm">Upload your first bill and it will appear here straight away.</p></div><button class="btn pri" data-a="newbill">${ic('plus')}New bill</button></div>`}
 
-function drawDashboardCharts(){const canvas=$('#cashflowChart');if(!canvas)return;if(!window.Chart){document.querySelectorAll('.chart-plot').forEach(plot=>plot.innerHTML='<div class="chart-empty">Charts need an internet connection to load.</div>');return}const now=new Date(),months=Array.from({length:6},(_,index)=>{const date=new Date(now.getFullYear(),now.getMonth()-5+index,1);return{key:`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`,label:new Intl.DateTimeFormat('en',{month:'short'}).format(date),revenue:0,expenses:0}});
-for(const bill of S.bills){const month=months.find(item=>item.key==billMonth(bill));if(!month)continue;if(EXP_T.includes(bill.type))month.expenses+=+bill.total||0;if(REV_T.includes(bill.type))month.revenue+=+bill.total||0}
-const grid='rgba(0,0,0,.07)',green='#F47B20',coral='#111111',amber='#F47B20',chartContext=canvas.getContext('2d'),revenueGradient=chartContext.createLinearGradient(0,0,0,220),expenseGradient=chartContext.createLinearGradient(0,0,0,220);revenueGradient.addColorStop(0,'rgba(244,123,32,.25)');revenueGradient.addColorStop(1,'rgba(244,123,32,0)');expenseGradient.addColorStop(0,'rgba(17,17,17,.12)');expenseGradient.addColorStop(1,'rgba(17,17,17,0)');S.charts.push(new Chart(canvas,{type:'line',data:{labels:months.map(x=>x.label),datasets:[{label:'Revenue',data:months.map(x=>r2(x.revenue)),borderColor:green,backgroundColor:revenueGradient,fill:true,tension:.35,pointRadius:3,pointHoverRadius:5,borderWidth:2},{label:'Expenses',data:months.map(x=>r2(x.expenses)),borderColor:coral,backgroundColor:expenseGradient,fill:true,tension:.35,pointRadius:3,pointHoverRadius:5,borderWidth:2}]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{position:'bottom',labels:{usePointStyle:true,boxWidth:7,boxHeight:7,padding:18,color:'#66736F',font:{family:"'DM Sans', sans-serif",size:12}}},tooltip:{callbacks:{label:item=>`${item.dataset.label}: ${inr(item.parsed.y)}`}}},scales:{x:{grid:{display:false},ticks:{color:'#7A8581'}},y:{beginAtZero:true,grid:{color:grid},ticks:{color:'#666',callback:value=>CFG.CURRENCY+(value>=1e7?+(value/1e7).toFixed(1)+'Cr':value>=1e5?+(value/1e5).toFixed(1)+'L':value>=1e3?+(value/1e3).toFixed(1)+'K':value)}}}}}));
-const donut=$('#expenseChart');if(!donut)return;const ym=thisMonth(),currentBills=S.bills.filter(b=>billMonth(b)==ym),medicine=sumOf(currentBills,['medicine_purchase']),other=sumOf(currentBills,['expense']),purchases=r2(medicine+other);if(purchases<=0)return;
-S.charts.push(new Chart(donut,{type:'doughnut',data:{labels:['Medicine purchases','Other expenses'],datasets:[{data:[medicine,other],backgroundColor:[coral,amber],borderColor:'#FFFFFF',borderWidth:3,hoverOffset:5}]},options:{responsive:true,maintainAspectRatio:false,cutout:'70%',plugins:{legend:{display:false},tooltip:{callbacks:{label:item=>`${item.label}: ${inr(item.parsed)}`}}},},plugins:[{id:'expense-center',afterDraw(chart){const area=chart.chartArea;if(!area)return;const ctx=chart.ctx,cx=(area.left+area.right)/2,cy=(area.top+area.bottom)/2;ctx.save();ctx.textAlign='center';ctx.fillStyle='#111';ctx.font='700 17px Poppins';ctx.fillText(inr(purchases),cx,cy);ctx.fillStyle='#666';ctx.font='10px "DM Sans"';ctx.fillText('THIS MONTH',cx,cy+17);ctx.restore()}}]}));const legend=$('#expenseLegend');if(legend)legend.innerHTML=[["Medicine purchases",medicine,coral],["Other expenses",other,amber]].map(([label,value,color])=>`<div class="chart-key"><span class="chart-dot" style="background:${color}"></span><span>${label}</span><span>${inr(value)}</span></div>`).join('')}
+function drawDashboardCharts(){const canvas=$('#cashflowChart');if(!canvas)return;if(!window.Chart){canvas.parentElement.innerHTML='<div class="chart-empty">The chart needs an internet connection to load.</div>';return}
+const now=new Date(),months=Array.from({length:6},(_,i)=>{const d=new Date(now.getFullYear(),now.getMonth()-5+i,1);return{key:`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`,label:new Intl.DateTimeFormat('en',{month:'short'}).format(d),inn:0,out:0}});
+for(const b of S.bills){const m=months.find(x=>x.key==billMonth(b));if(!m)continue;if(EXP_T.includes(b.type))m.out+=+b.total||0;if(REV_T.includes(b.type))m.inn+=+b.total||0}
+const short=v=>CFG.CURRENCY+(v>=1e7?+(v/1e7).toFixed(1)+'Cr':v>=1e5?+(v/1e5).toFixed(1)+'L':v>=1e3?+(v/1e3).toFixed(1)+'K':v),still=matchMedia('(prefers-reduced-motion: reduce)').matches,font={family:"'DM Sans', system-ui, sans-serif",size:12},bar={borderRadius:6,borderSkipped:false,maxBarThickness:20,categoryPercentage:.62,barPercentage:.9};
+S.charts.push(new Chart(canvas,{type:'bar',data:{labels:months.map(m=>m.label),datasets:[{label:'Came in',data:months.map(m=>r2(m.inn)),backgroundColor:'#F47B20',...bar},{label:'Went out',data:months.map(m=>r2(m.out)),backgroundColor:'#121212',...bar}]},
+options:{responsive:true,maintainAspectRatio:false,animation:still?false:{duration:600},interaction:{mode:'index',intersect:false},plugins:{legend:{display:false},tooltip:{backgroundColor:'#121212',padding:10,callbacks:{label:i=>` ${i.dataset.label}: ${inr(i.parsed.y)}`}}},
+scales:{x:{grid:{display:false},border:{display:false},ticks:{color:'#666',font}},y:{beginAtZero:true,border:{display:false},grid:{color:'rgba(0,0,0,.06)'},ticks:{color:'#888',maxTicksLimit:4,font:{...font,size:11},callback:v=>short(v)}}}}}))}
 function clearDashboardCharts(){S.charts.forEach(chart=>chart.destroy());S.charts=[]}
 
 function savedNames(){return[...new Set(S.bills.map(b=>(b.party||'').trim()).filter(Boolean))]}
@@ -1290,7 +1382,7 @@ const neg=S.meds.find(m=>(+m.qty||0)<-0.0005&&(+m.qty||0)<(+(oldMeds.find(o=>o.i
 if(!legacy)b.stock_movements=mv.movements;if(S.lastUpload?.id==b.id)S.lastUpload={...S.lastUpload,type:b.type,impact:impactOf(b,mv),shortage:shortageOf(b,mv),warnings:[]};
 S.busy=1;const ok=await persist();S.busy=0;if(!ok){S.meds=oldMeds;restoreBill(b,oldBill,file);S.msg='Could not save the changes. Free space and try again.';return render()}
 S.edit=null;S.detail=b.id;go('detail');toast(legacy?'Bill corrected. Stock was not changed because this older bill has no stock history':'Bill corrected. Stock and totals updated')},
-mf(d){S.mf=d.f;render()},rep(d){S.rep=d.r;render()},repgo(d){S.rep=d.r;go('reports')},export(){exportReport()},addmed(){S.sheet=1;S.msg='';render()},closemed(){S.sheet=0;render()},
+mf(d){S.mf=d.f;render()},medgo(d){S.mf=d.f;go('meds')},dismiss(){S.lastUpload=null;persist();render()},rep(d){S.rep=d.r;render()},repgo(d){S.rep=d.r;go('reports')},export(){exportReport()},addmed(){S.sheet=1;S.msg='';render()},closemed(){S.sheet=0;render()},
 async savemed(){const fm=S.mform,n=fm.name.trim(),q=parseNumber(fm.qty);if(!n||!(q>0))return S.msg='Please add the medicine name and a quantity.',render();const k=medKey(n),bt=normBatch(fm.batch),m=S.meds.find(x=>sameMed(keyOf(x),k)&&normBatch(x.batch)==bt),oldMeds=S.meds.map(x=>({...x}));if(m){m.qty=r3((+m.qty||0)+q);m.manufacture_date=fm.manufacture_date||m.manufacture_date;m.expiry=fm.expiry||m.expiry}else S.meds.push({id:uid(),name:n,key:k,batch:bt,qty:q,pack_n:'',mrp:'',manufacture_date:fm.manufacture_date,expiry:fm.expiry,supplier:fm.supplier.trim()});S.busy=1;const ok=await persist();S.busy=0;if(!ok){S.meds=oldMeds;return S.msg='Could not save medicine in browser storage. Free space and try again.',render()}S.mform={name:'',batch:'',qty:'',manufacture_date:'',expiry:'',supplier:''};S.sheet=0;render();toast('Medicine added')},
 out(){try{localStorage.removeItem(SESSION_KEY)}catch{}S.user=null;S.auth={name:'',email:'',pw:'',pw2:''};go('login')}};
 document.addEventListener('click',e=>{const a=e.target.closest('[data-a]');if(a&&A[a.dataset.a]&&!a.disabled&&!S.busy)A[a.dataset.a](a.dataset)});
