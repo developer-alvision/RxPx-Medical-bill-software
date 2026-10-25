@@ -112,7 +112,7 @@ select.inp{appearance:none;-webkit-appearance:none;background:var(--cd) url("dat
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script>
 /* ===== Bill reader: turns OCR / PDF / spreadsheet text into bill details ===== */
 const BillParser = (() => {
@@ -328,6 +328,8 @@ const BillParser = (() => {
     if (/\d\s*(ML|GM|G|KG|MG|L)\b/.test(t)) return 1;
     return '';
   }
+  // dosage forms and strengths belong to the medicine name, never to the batch number
+  const NAME_BIT = /^(?:tabs?|tablets?|caps?|capsules?|syp|syr|syrup|susp|suspension|inj|injection|drops?|cream|gel|oint|ointment|lotion|sachet|powder|soln|solution|spray|inhaler|respules?|vial|amp|ampoule|kit)\.?$|^(?:\d{1,4}(?:\.\d+)?(?:mg|mcg|ml|iu|%)|\d{1,3}(?:\.\d+)?(?:g|gm))(?:\/\d{0,4}(?:\.\d+)?(?:ml|g|gm))?$/i;
   const looksBatch = t => /^[A-Z0-9][A-Z0-9\-\/]{2,14}$/i.test(t) && digits(t) >= 2 && letters(t) >= 1 && !/^(?:tab|cap|inj|syp)/i.test(t) && !/^\d{1,2}[\/\-]\d{2,4}$/.test(t);
 
   function cellText(cells, k) { return (cells[k] || []).map(t => t.t).join(' ').trim() }
@@ -474,6 +476,13 @@ const BillParser = (() => {
           }
         }
         cells.desc.sort((a, b) => a.x0 - b.x0);
+      }
+      if (cells.batch) {
+        const bits = cells.batch.filter(t => NAME_BIT.test(t.t));
+        if (bits.length) {
+          (cells.desc ||= []).push(...bits); cells.desc.sort((a, b) => a.x0 - b.x0);
+          cells.batch = cells.batch.filter(t => !bits.includes(t)); if (!cells.batch.length) delete cells.batch;
+        }
       }
       const numericCols = ['qty', 'free', 'mrp', 'rate', 'amount', 'disc', 'gst', 'exp', 'hsn', 'batch'];
       const hasNums = numericCols.some(k => (cells[k] || []).some(t => digits(t.t)));
@@ -973,7 +982,10 @@ const inr=n=>CFG.CURRENCY+new Intl.NumberFormat('en-IN',{maximumFractionDigits:2
 const okDate=d=>/^\d{4}-\d{2}-\d{2}$/.test(d||'')&&!Number.isNaN(new Date(d+'T00:00').valueOf());
 const fd=d=>okDate(d)?new Date(d+'T00:00').toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}):'Not set';
 const uid=()=>crypto.randomUUID?crypto.randomUUID():String(Date.now())+Math.random().toString(16).slice(2);
-const STORE_KEY='hospital-bills-preview-v1',SESSION_KEY='rxpx-session-v1',FLOW_KEY='rxpx-flow-v1';
+const STORE_KEY='hospital-bills-preview-v1',SESSION_KEY='rxpx-session-v1',FLOW_KEY='rxpx-flow-v1',ACCOUNTS_KEY='rxpx-accounts-v1';
+const accounts=()=>{try{return JSON.parse(localStorage.getItem(ACCOUNTS_KEY)||'{}')||{}}catch{return{}}};
+const b64=a=>btoa(String.fromCharCode(...new Uint8Array(a))),unb64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+async function pwHash(pw,salt,iter){const k=await crypto.subtle.importKey('raw',new TextEncoder().encode(pw),'PBKDF2',false,['deriveBits']);return b64(await crypto.subtle.deriveBits({name:'PBKDF2',hash:'SHA-256',salt,iterations:iter},k,256))}
 const day0=()=>{const d=new Date();d.setHours(0,0,0,0);return d};
 const r2=v=>Math.round((+v+Number.EPSILON)*100)/100,r3=v=>Math.round((+v+Number.EPSILON)*1000)/1000;
 const st=m=>{if(!okDate(m.expiry))return'good';const d=Math.round((new Date(m.expiry+'T00:00')-day0())/864e5);return d<0?'exp':d<=CFG.EXPIRY_WARNING_DAYS?'soon':'good'};
@@ -986,13 +998,26 @@ const billMonth=b=>{const d=okDate(b.bill_date)?new Date(`${b.bill_date}T12:00:0
 const thisMonth=()=>{const n=new Date();return`${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}`};
 const sumOf=(list,types)=>r2(list.filter(b=>!types||types.includes(b.type)).reduce((s,b)=>s+(+b.total||0),0));
 const typeLabel=t=>TYPES[t]?.t||'Unclassified bill';
-const persist=()=>{try{localStorage.setItem(STORE_KEY,JSON.stringify({bills:S.bills.map(b=>({...b,file:b.file?{name:b.file.name,type:b.file.type,kind:b.file.kind,hash:b.file.hash||'',stored:!!b.file.stored,url:''}:null})),meds:S.meds,lastUpload:S.lastUpload}));return true}catch{return false}};
+const DATA_KEY='__rxpx_data__',DATA={idb:false,chan:null,at:0};
+const snapshot=()=>({savedAt:Math.max(Date.now(),DATA.at+1),bills:S.bills.map(b=>({...b,file:b.file?{name:b.file.name,type:b.file.type,kind:b.file.kind,hash:b.file.hash||'',stored:!!b.file.stored,url:''}:null})),meds:S.meds,lastUpload:S.lastUpload});
+// resolves true once the data is safely stored; callers roll back their change on false
+const persist=async()=>{const data=snapshot();if(DATA.idb){try{await IDB.put(DATA_KEY,data);DATA.at=data.savedAt;try{DATA.chan&&DATA.chan.postMessage('saved')}catch{}return true}catch{return false}}try{localStorage.setItem(STORE_KEY,JSON.stringify(data));DATA.at=data.savedAt;return true}catch{return false}};
+const applyData=saved=>{saved=saved||{};DATA.at=+saved.savedAt||0;S.bills=Array.isArray(saved.bills)?saved.bills.map(({notes,...b})=>({...b,items:Array.isArray(b.items)?b.items:[]})):[];S.meds=Array.isArray(saved.meds)?saved.meds.map(m=>({...m,id:m.id||uid()})):[];S.lastUpload=saved.lastUpload||null};
+async function loadData(){let ls=null,db=null;try{ls=JSON.parse(localStorage.getItem(STORE_KEY)||'null')}catch{}
+try{db=await IDB.get(DATA_KEY);DATA.idb=true}catch{DATA.idb=false}
+if(!DATA.idb)return applyData(ls);
+if(ls&&(!db||(+ls.savedAt||0)>(+db.savedAt||0))){const moved={...ls,savedAt:Math.max(+ls.savedAt||0,(+db?.savedAt||0)+1,1)};try{await IDB.put(DATA_KEY,moved);try{localStorage.removeItem(STORE_KEY)}catch{}return applyData(moved)}catch{DATA.idb=false;return applyData(ls)}}
+// an older copy left in localStorage (e.g. written by a tab still running the old version): keep it as a backup, then drop it
+if(ls)try{await IDB.put('__rxpx_backup_'+Date.now(),ls);localStorage.removeItem(STORE_KEY)}catch{}
+applyData(db)}
+// another tab saved: load its newer copy so this tab never writes back an older one
+async function reloadData(){if(S.busy)return;let saved=null;try{saved=DATA.idb?await IDB.get(DATA_KEY):JSON.parse(localStorage.getItem(STORE_KEY)||'null')}catch{return}if(!saved||S.busy||(+saved.savedAt||0)<=DATA.at)return;applyData(saved);if(S.user&&['home','meds','reports','profile','detail'].includes(S.view)&&!S.ask&&!S.sheet)render()}
 const saveFlow=()=>{try{if(['new','upload'].includes(S.view))sessionStorage.setItem(FLOW_KEY,JSON.stringify({view:S.view,flow:S.flow,partyName:S.partyName,selectedName:S.selectedName}));else sessionStorage.removeItem(FLOW_KEY)}catch{}};
 const go=v=>{S.view=v;S.msg='';S.ask=0;render();scrollTo(0,0)};
 
 /* ---------- saved files (original bill photos / PDFs) ---------- */
-const IDB={db:null,open(){return this.db||(this.db=new Promise((res,rej)=>{if(!window.indexedDB)return rej(new Error('no storage'));const r=indexedDB.open('rxpx-files',1);r.onupgradeneeded=()=>r.result.createObjectStore('files');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)}))},
-async put(k,v){const db=await this.open();return new Promise((res,rej)=>{const t=db.transaction('files','readwrite');t.objectStore('files').put(v,k);t.oncomplete=()=>res(true);t.onerror=()=>rej(t.error)})},
+const IDB={db:null,open(){return this.db||(this.db=new Promise((res,rej)=>{if(!window.indexedDB)return rej(new Error('no storage'));let r,late=false;try{r=indexedDB.open('rxpx-files',1)}catch(e){return rej(e)}const t=setTimeout(()=>{late=true;rej(new Error('storage timeout'))},5000);r.onupgradeneeded=()=>r.result.createObjectStore('files');r.onsuccess=()=>{clearTimeout(t);const db=r.result;if(late)return db.close();db.onversionchange=()=>db.close();res(db)};r.onerror=()=>{clearTimeout(t);rej(r.error)}}).catch(e=>{this.db=null;throw e}))},
+async put(k,v){const db=await this.open();return new Promise((res,rej)=>{const t=db.transaction('files','readwrite');t.objectStore('files').put(v,k);t.oncomplete=()=>res(true);t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error||new Error('storage aborted'))})},
 async get(k){const db=await this.open();return new Promise((res,rej)=>{const q=db.transaction('files').objectStore('files').get(k);q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error)})},
 async del(k){const db=await this.open();return new Promise(res=>{const t=db.transaction('files','readwrite');t.objectStore('files').delete(k);t.oncomplete=()=>res(true);t.onerror=()=>res(false)})}};
 
@@ -1024,7 +1049,7 @@ stat=(l,v,sub)=>`<div class="card stat"><div class="mu sm">${l}</div><div class=
 return shell('home',`<div class="sp"><div><h1>${h<12?'Good morning':h<17?'Good afternoon':'Good evening'}, ${esc(S.user.name.split(' ')[0])}</h1><div class="mu sm"><span class="live"></span>${esc(CFG.HOSPITAL_NAME)}, live</div></div><button class="av" data-a="go" data-v="profile" aria-label="Profile">${esc(S.user.name[0].toUpperCase())}</button></div>
 ${lastCard()}
 <section class="chart-grid"><div class="card chart-card"><div class="chart-title">Revenue and expenses</div><div class="chart-subtitle">Six-month movement from saved bills</div><div class="chart-plot"><canvas id="cashflowChart" aria-label="Revenue and expenses by month"></canvas></div></div><div class="card chart-card"><div class="chart-title">Expense mix</div><div class="chart-subtitle">Where this month's expenses come from</div>${expenses?`<div class="chart-plot donut"><canvas id="expenseChart" aria-label="Expense categories this month"></canvas></div><div id="expenseLegend" class="chart-legend"></div>`:`<div class="chart-plot donut"><div class="chart-empty">Expense categories appear after bills are saved.</div></div>`}</div></section>
-<div class="g2">${stat('Expenses this month',inr(expenses),'All time: '+inr(sumOf(S.bills,EXP_T)))}${stat('Revenue this month',inr(revenue),'All time: '+inr(sumOf(S.bills,REV_T)))}${stat('Bills this month',mb.length)}${stat('Stock units',new Intl.NumberFormat('en-IN',{maximumFractionDigits:1}).format(S.meds.reduce((sum,m)=>sum+Math.max(0,+m.qty||0),0)))}${stat('Medicine types',S.meds.filter(m=>m.qty>0).length)}${stat('Needs attention',att.length)}${stat('Low stock items',S.meds.filter(m=>m.qty<=CFG.LOW_STOCK_LIMIT).length)}${unclassified.length?stat('Unclassified bills',unclassified.length,'Open a bill and choose its type'):''}</div>
+<div class="g2">${stat('Expenses this month',inr(expenses),'All time: '+inr(sumOf(S.bills,EXP_T)))}${stat('Revenue this month',inr(revenue),'All time: '+inr(sumOf(S.bills,REV_T)))}${stat('Bills this month',mb.length)}${stat('Stock units',new Intl.NumberFormat('en-IN',{maximumFractionDigits:1}).format(S.meds.reduce((sum,m)=>sum+Math.max(0,+m.qty||0),0)))}${stat('Medicine types',new Set(S.meds.filter(m=>m.qty>0).map(keyOf)).size)}${stat('Needs attention',att.length)}${stat('Low stock items',S.meds.filter(m=>m.qty<=CFG.LOW_STOCK_LIMIT).length)}${unclassified.length?stat('Unclassified bills',unclassified.length,'Open a bill and choose its type'):''}</div>
 <section><b>Bills by type this month</b>${TKEYS.map(k=>{const l=mb.filter(b=>b.type==k);return`<button class="row" data-a="repgo" data-r="${k}"><div><b>${TYPES[k].s}</b><span class="mu sm">${l.length} ${l.length==1?'bill':'bills'} · ${TYPES[k].money=='expense'?'expense':'revenue'}</span></div><b class="num">${inr(sumOf(l))}</b></button>`}).join('')}</section>
 <section><b>Expenses breakdown</b><div class="row"><div><b>Medicine purchases</b><span class="mu sm">Supplier bills this month</span></div><b class="num">${inr(purchases)}</b></div><div class="row"><div><b>Other expenses</b><span class="mu sm">Expense bills this month</span></div><b class="num">${inr(otherExpenses)}</b></div><div class="row"><div><b>Total expenses</b></div><b class="num">${inr(expenses)}</b></div></section>
 <section><div class="sp"><b>Needs attention</b>${att.length?`<button class="lnk" data-a="go" data-v="meds">View all</button>`:''}</div>${att.length?att.slice(0,5).map(m=>`<div class="row"><div><b>${esc(m.name)}</b><span class="mu sm">Expires ${fd(m.expiry)}</span></div>${badge(m).split(' <')[0]}</div>`).join(''):`<div class="card mu" style="margin-top:8px">Nothing needs attention right now. Medicines that expire soon will show up here.</div>`}</section>
@@ -1090,28 +1115,31 @@ const medSheet=()=>{const f=S.mform,x=(k,l,t)=>`<label class="fl">${l}<input cla
 
 const REPS=[['all','All bills'],...TKEYS.map(k=>[k,TYPES[k].s]),['stock','Medicine stock']];
 const byDate=(a,b)=>String(b.bill_date||b.at||'').localeCompare(String(a.bill_date||a.at||''));
+const totRow=(n,l)=>`<tr><td colspan="2"><b>${n} (${l.length} ${l.length==1?'bill':'bills'})</b></td><td class="num r"><b>${inr(sumOf(l))}</b></td></tr>`;
 function reports(){const r=S.rep,st_=r=='stock',L=st_?[...S.meds].sort(byExp):S.bills.filter(b=>r=='all'||b.type==r).sort(byDate);
 return shell('reports',`<h1>Reports</h1><div class="chips">${REPS.map(([k,l])=>`<button class="chip ${r==k?'on':''}" data-a="rep" data-r="${k}">${l}</button>`).join('')}</div>
-<div class="card" style="overflow-x:auto;padding:8px 12px">${L.length?`<table class="rtab"><tr>${st_?'<th>Medicine</th><th>Qty</th><th>Expiry</th>':'<th>Date</th><th>Name</th><th class="r">Amount</th>'}</tr>${L.map(x=>st_?`<tr><td><b>${esc(x.name)}</b><span class="mu sm">Batch ${esc(x.batch||'-')}${x.manufacture_date?' · Mfg '+fd(x.manufacture_date):''}</span></td><td class="num">${esc(fmtQty(x))}</td><td>${fd(x.expiry)}</td></tr>`:`<tr data-a="open" data-id="${x.id}"><td>${fd(x.bill_date)}</td><td><b>${esc(x.party||x.file?.name||'Scanned bill')}</b><span class="mu sm">${r=='all'?esc(TYPES[x.type]?.s||'Unclassified')+' · ':''}${esc(x.bill_number||'No bill no')}</span></td><td class="num r">${inr(x.total)}</td></tr>`).join('')}${st_?'':`<tr><td colspan="2"><b>Total (${L.length} ${L.length==1?'bill':'bills'})</b></td><td class="num r"><b>${inr(sumOf(L))}</b></td></tr>`}</table>`:`<p class="mu" style="padding:24px 12px;text-align:center">Nothing to show here yet. Saved bills and stock will fill this table.</p>`}</div>
+<div class="card" style="overflow-x:auto;padding:8px 12px">${L.length?`<table class="rtab"><tr>${st_?'<th>Medicine</th><th>Qty</th><th>Expiry</th>':'<th>Date</th><th>Name</th><th class="r">Amount</th>'}</tr>${L.map(x=>st_?`<tr><td><b>${esc(x.name)}</b><span class="mu sm">Batch ${esc(x.batch||'-')}${x.manufacture_date?' · Mfg '+fd(x.manufacture_date):''}</span></td><td class="num">${esc(fmtQty(x))}</td><td>${fd(x.expiry)}</td></tr>`:`<tr data-a="open" data-id="${x.id}"><td>${fd(x.bill_date)}</td><td><b>${esc(x.party||x.file?.name||'Scanned bill')}</b><span class="mu sm">${r=='all'?esc(TYPES[x.type]?.s||'Unclassified')+' · ':''}${esc(x.bill_number||'No bill no')}</span></td><td class="num r">${inr(x.total)}</td></tr>`).join('')}${st_?'':r=='all'?[['Revenue',L.filter(b=>REV_T.includes(b.type))],['Expenses',L.filter(b=>EXP_T.includes(b.type))],['Unclassified',L.filter(b=>!TYPES[b.type])]].filter(([,l])=>l.length).map(([n,l])=>totRow(n,l)).join(''):totRow('Total',L)}</table>`:`<p class="mu" style="padding:24px 12px;text-align:center">Nothing to show here yet. Saved bills and stock will fill this table.</p>`}</div>
 <button class="btn" data-a="export">${ic('download')}Download Excel</button><p class="note">The Excel file has a sheet for every bill type, all bill items, and medicine stock.</p>`)}
 const profile=()=>shell('profile',`<h1>Profile</h1><div class="card dl"><dt>Name</dt><dd>${esc(S.user.name)}</dd><dt>Email</dt><dd>${esc(S.user.email)}</dd><dt>Role</dt><dd>${S.user.admin?'Admin':'Staff'}</dd></div><button class="btn" data-a="out">${ic('log-out')}Sign out</button>`);
 
 function exportReport(){
 const billRow=b=>({'Date':b.bill_date||'','Uploaded at':b.at,'Type':TYPES[b.type]?.s||'Unclassified','Bill number':b.bill_number||'','Name':b.party||b.file?.name||'Scanned bill','Reference':b.ref||'','Payment':b.mode||'','Tax':+b.tax||0,'Discount':+b.disc||0,'Total':+b.total||0,'Items':b.items.length});
-const withTotal=rows=>rows.length?[...rows,{'Date':'','Uploaded at':'','Type':'','Bill number':'','Name':`Total (${rows.length} ${rows.length==1?'bill':'bills'})`,'Reference':'','Payment':'','Tax':r2(rows.reduce((s,x)=>s+x.Tax,0)),'Discount':r2(rows.reduce((s,x)=>s+x.Discount,0)),'Total':r2(rows.reduce((s,x)=>s+x.Total,0)),'Items':''}]:[];
+const totalRow=(rows,label)=>({'Date':'','Uploaded at':'','Type':'','Bill number':'','Name':`${label} (${rows.length} ${rows.length==1?'bill':'bills'})`,'Reference':'','Payment':'','Tax':r2(rows.reduce((s,x)=>s+x.Tax,0)),'Discount':r2(rows.reduce((s,x)=>s+x.Discount,0)),'Total':r2(rows.reduce((s,x)=>s+x.Total,0)),'Items':''});
+const withTotal=rows=>rows.length?[...rows,totalRow(rows,'Total')]:[];
+const allWithTotals=bills=>bills.length?[...bills.map(billRow),...[['Total revenue',bills.filter(b=>REV_T.includes(b.type))],['Total expenses',bills.filter(b=>EXP_T.includes(b.type))],['Unclassified',bills.filter(b=>!TYPES[b.type])]].filter(([,l])=>l.length).map(([n,l])=>totalRow(l.map(billRow),n))]:[];
 const itemRows=S.bills.flatMap(b=>b.items.map(i=>({'Bill date':b.bill_date||'','Type':TYPES[b.type]?.s||'Unclassified','Bill number':b.bill_number||'','Name on bill':b.party||'','Item':i.description||'','Batch':i.batch_no||'','Mfg date':i.manufacture_date||'','Expiry':i.expiry_date||'','Quantity':+i.quantity||0,'Free':+i.free||0,'MRP':i.mrp===''||i.mrp==null?'':+i.mrp,'Rate':i.rate===''||i.rate==null?'':+i.rate,'Amount':+i.amount||0})));
 const stockRows=[...S.meds].sort(byExp).map(m=>({'Medicine':m.name,'Batch':m.batch||'','Quantity':r3(+m.qty||0),'Pack size':m.pack_n||'','Manufactured':m.manufacture_date||'','Expiry':m.expiry||'','Status':BL[st(m)],'Supplier':m.supplier||''}));
 const ym=thisMonth(),mb=S.bills.filter(b=>billMonth(b)==ym);
 const summary=[...TKEYS.map(k=>({'Section':TYPES[k].s,'Counts as':TYPES[k].money,'Bills this month':mb.filter(b=>b.type==k).length,'Amount this month':sumOf(mb,[k]),'Bills all time':S.bills.filter(b=>b.type==k).length,'Amount all time':sumOf(S.bills,[k])})),{'Section':'Total expenses','Counts as':'','Bills this month':'','Amount this month':sumOf(mb,EXP_T),'Bills all time':'','Amount all time':sumOf(S.bills,EXP_T)},{'Section':'Total revenue','Counts as':'','Bills this month':'','Amount this month':sumOf(mb,REV_T),'Bills all time':'','Amount all time':sumOf(S.bills,REV_T)}];
 if(!S.bills.length&&!S.meds.length)return toast('There is no data to download yet');
-const stamp=new Date().toISOString().slice(0,10);
+const now=new Date(),stamp=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
 if(window.XLSX){const book=XLSX.utils.book_new(),add=(rows,name,head)=>XLSX.utils.book_append_sheet(book,rows.length?XLSX.utils.json_to_sheet(rows):XLSX.utils.aoa_to_sheet([head]),name);
-add(summary,'Summary',['Section']);add(withTotal(S.bills.map(billRow)),'All bills',['Date','Type','Bill number','Name','Total']);
+add(summary,'Summary',['Section']);add(allWithTotals(S.bills),'All bills',['Date','Type','Bill number','Name','Total']);
 for(const k of TKEYS)add(withTotal(S.bills.filter(b=>b.type==k).map(billRow)),TYPES[k].s,['Date','Bill number','Name','Total']);
 add(itemRows,'Bill items',['Bill date','Item','Quantity','Amount']);add(stockRows,'Medicine stock',['Medicine','Batch','Quantity','Expiry']);
 XLSX.writeFile(book,`rxpx-bills-${stamp}.xlsx`);return}
-const rows=S.rep=='stock'?stockRows:withTotal(S.bills.filter(b=>S.rep=='all'||b.type==S.rep).map(billRow));if(!rows.length)return toast('There is no data in this report yet');
-const cols=Object.keys(rows[0]),csv=[cols,...rows.map(r=>cols.map(c=>r[c]??''))].map(row=>row.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\r\n'),url=URL.createObjectURL(new Blob(['﻿',csv],{type:'text/csv;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download=`rxpx-${S.rep}-${stamp}.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
+const rows=S.rep=='stock'?stockRows:S.rep=='all'?allWithTotals(S.bills):withTotal(S.bills.filter(b=>b.type==S.rep).map(billRow));if(!rows.length)return toast('There is no data in this report yet');
+const cols=Object.keys(rows[0]),csv=[cols,...rows.map(r=>cols.map(c=>r[c]??''))].map(row=>row.map(v=>`"${(typeof v=='string'&&/^[=+\-@\t\r]/.test(v)?"'"+v:String(v)).replace(/"/g,'""')}"`).join(',')).join('\r\n'),url=URL.createObjectURL(new Blob(['﻿',csv],{type:'text/csv;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download=`rxpx-${S.rep}-${stamp}.csv`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
 
 let lastV='';
 function render(){clearDashboardCharts();const V={login,home,new:chooser,upload,proc,kind,detail,edit:editView,meds,reports,profile};if(!S.user)S.view='login';if(!V[S.view])S.view='home';
@@ -1125,7 +1153,7 @@ const billAmount=d=>{const t=parseNumber(d.total_amount);if(t!=='')return t;cons
 function setReadProgress(message,step){S.ocrMessage=message;if(step!==undefined)setStep(step);const status=$('#ocrStatus');if(status)status.textContent=message}
 const READ={ready:null,worker:null,log:null};
 function ocrReady(){if(!window.Tesseract)return Promise.reject(new Error('The bill reader could not load. Check your internet connection and try again.'));
-if(!READ.ready){READ.ready=(async()=>{const w=await Tesseract.createWorker('eng',1,{logger:m=>READ.log&&READ.log(m)});await w.setParameters({tessedit_pageseg_mode:'6',preserve_interword_spaces:'1',user_defined_dpi:'300'});READ.worker=w;return w})();READ.ready.catch(()=>{READ.ready=null})}return READ.ready}
+if(!READ.ready){const p=READ.ready=(async()=>{const w=await Tesseract.createWorker('eng',1,{logger:m=>READ.log&&READ.log(m)});const stale=()=>{if(READ.ready===p)return false;try{w.terminate()}catch{}return true};if(stale())throw new Error('cancelled');await w.setParameters({tessedit_pageseg_mode:'6',preserve_interword_spaces:'1',user_defined_dpi:'300'});if(stale())throw new Error('cancelled');READ.worker=w;return w})();p.catch(()=>{if(READ.ready===p)READ.ready=null})}return READ.ready}
 const resetReader=()=>{try{READ.worker&&READ.worker.terminate()}catch{}READ.worker=null;READ.ready=null};
 const warmReader=()=>{try{ocrReady().catch(()=>{})}catch{}};
 async function ocrCanvas(canvas,label){
@@ -1139,14 +1167,15 @@ let best=null;const side=(rot%2==0)&&BillImage.sideways(img),order=side?[1,3,0]:
 S.file.rot=((best.rot%4)+4)%4;return best}finally{done()}}
 function groupLines(toks){toks.sort((a,b)=>a.y0-b.y0||a.x0-b.x0);const lines=[];for(const t of toks){const h=Math.max(1,t.y1-t.y0),cy=(t.y0+t.y1)/2,l=lines.find(l=>Math.abs(l.cy-cy)<=Math.max(h,l.h)*0.5);if(l){l.toks.push(t)}else lines.push({cy,h,toks:[t]})}lines.sort((a,b)=>a.cy-b.cy);return lines.map(l=>({toks:l.toks.sort((a,b)=>a.x0-b.x0)}))}
 async function readPdf(file,id){if(!window.pdfjsLib)throw new Error('PDF reading is unavailable. Check your internet connection or upload photos of the pages instead.');pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-const pdf=await withTimeout(pdfjsLib.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise,30000,'Could not open this PDF in time. Try another copy.');if(pdf.numPages>30)throw new Error('This PDF has more than 30 pages. Split it into smaller files and try again.');
+const task=pdfjsLib.getDocument({data:new Uint8Array(await file.arrayBuffer()),isEvalSupported:false});try{
+const pdf=await withTimeout(task.promise,30000,'Could not open this PDF in time. Try another copy.');if(pdf.numPages>30)throw new Error('This PDF has more than 30 pages. Split it into smaller files and try again.');
 const lines=[];let source='pdf';
 for(let p=1;p<=pdf.numPages;p++){if(S.run!=id)throw new Error('cancelled');setReadProgress(`Reading PDF page ${p} of ${pdf.numPages}...`,1);const page=await withTimeout(pdf.getPage(p),20000,'This PDF page could not be opened. Try another copy.'),vp=page.getViewport({scale:1}),content=await withTimeout(page.getTextContent(),20000,'This PDF page could not be read. Try another copy.');
 const toks=content.items.filter(it=>it.str&&it.str.trim()).map(it=>{const x=it.transform[4],y=it.transform[5],h=Math.abs(it.height||it.transform[3])||10,w=it.width||it.str.length*h*0.5;return{t:it.str.trim(),x0:x,x1:x+w,y0:vp.height-y-h,y1:vp.height-y}});
 if(toks.map(t=>t.t).join('').replace(/\s/g,'').length<25){source='ocr';const scale=Math.min(3.5,2400/vp.width),view=page.getViewport({scale}),c=document.createElement('canvas');c.width=Math.ceil(view.width);c.height=Math.ceil(view.height);const ctx=c.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,c.width,c.height);await withTimeout(page.render({canvasContext:ctx,viewport:view}).promise,30000,'This PDF page could not be shown. Try photos of the pages instead.');
 const r=await ocrCanvas(BillImage.prepare(c,0),`Reading page ${p} of ${pdf.numPages}...`);lines.push(...r.lines)}
 else lines.push(...groupLines(toks))}
-return{source,lines}}
+return{source,lines}}finally{task.destroy().catch(()=>{})}}
 function sheetCellText(cell){const pad=n=>String(n).padStart(2,'0');if(cell.t=='d'&&cell.v instanceof Date)return`${pad(cell.v.getDate())}/${pad(cell.v.getMonth()+1)}/${cell.v.getFullYear()}`;if(cell.t=='n'&&cell.z&&XLSX.SSF.is_date(cell.z)){const d=XLSX.SSF.parse_date_code(cell.v);if(d&&d.y>1900)return`${pad(d.d)}/${pad(d.m)}/${d.y}`}if(cell.t=='n')return String(cell.v);return String(cell.w??cell.v??'').trim()}
 async function readSheet(file){if(!window.XLSX)throw new Error('Excel reading is unavailable. Check your internet connection and try again.');const csv=/\.csv$/i.test(file.name)||/csv/.test(file.type);
 const book=csv?XLSX.read(await file.text(),{type:'string',raw:true}):XLSX.read(await file.arrayBuffer(),{type:'array',cellDates:false,cellNF:true});const ws=book.Sheets[book.SheetNames[0]];if(!ws||!ws['!ref'])throw new Error('This spreadsheet has no readable sheet.');
@@ -1158,7 +1187,7 @@ async function fileHash(file){try{if(!crypto.subtle)return'';const h=await crypt
 const normNo=s=>String(s||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
 function findDuplicate(d,hash,party){const no=normNo(d.bill_number),tot=billAmount(d),p=party.trim().toLowerCase();
 return S.bills.find(b=>{if(hash&&b.file?.hash===hash)return true;const bn=normNo(b.bill_number),bp=(b.party||'').trim().toLowerCase(),sameTot=Math.abs((+b.total||0)-tot)<=1;
-if(no&&bn&&no==bn)return bp==p||sameTot||(d.bill_date&&b.bill_date==d.bill_date);
+if(no&&bn&&no==bn)return sameTot||(bp==p&&(!d.bill_date||!b.bill_date||b.bill_date==d.bill_date));
 return !no&&d.bill_date&&b.bill_date==d.bill_date&&sameTot&&bp==p&&b.items.length==d.items.length})}
 function looksLikeBill(d){const realTotal=d.total_amount!==''&&!d.warnings.includes('total_calculated');return d.items.length>0&&!!(d.bill_date||d.bill_number||realTotal)||realTotal&&!!(d.bill_number||d.bill_date)}
 async function startRead(){const id=S.run=uid();S.step=0;S.bad=0;S.dup=null;S.ocrMessage='Opening your bill...';S.view='proc';render();
@@ -1178,7 +1207,10 @@ catch(e){if(S.run!=id)return;S.bad=1;const fk=S.file?.kind;let message=e.message
 /* ---------- stock ---------- */
 const FORMS=[[/\bTABLETS?\b|\bTABS?\b/g,'TAB'],[/\bCAPSULES?\b|\bCAPS\b/g,'CAP'],[/\bINJECTIONS?\b/g,'INJ'],[/\bSYRUP\b|\bSYR\b/g,'SYP'],[/\bSUSPENSION\b/g,'SUSP'],[/\bOINTMENT\b/g,'OINT'],[/\bDROPS\b/g,'DROP']];
 function medKey(n){let s=' '+String(n||'').toUpperCase().replace(/[^A-Z0-9.]+/g,' ')+' ';for(const[r,v]of FORMS)s=s.replace(r,v);return s.replace(/\b\d+\s*'?S\b|\b\d+\s*X\s*\d+\b|\bSTRIPS?\b|\bPACK\b|\b\d+(?:\.\d+)?\s*(?:ML|L|LTR)\b/g,' ').replace(/\s+/g,' ').trim()}
-function sameMed(a,b){if(!a||!b)return false;if(a===b)return true;const na=(a.match(/\d+(?:\.\d+)?/g)||[]).join(','),nb=(b.match(/\d+(?:\.\d+)?/g)||[]).join(',');if(na!==nb)return false;const la=a.replace(/[^A-Z]/g,''),lb=b.replace(/[^A-Z]/g,'');if(la.length<3||lb.length<3)return false;return 1-BillParser.lev(la,lb)/Math.max(la.length,lb.length)>=0.8}
+const FORM_WORD=/\b(?:TAB|CAP|INJ|SYP|SUSP|OINT|DROP|CREAM|GEL|LOTION|SPRAY|SACHET|POWDER|INHALER|VIAL|AMP|SOLN)\b/g;
+function sameMed(a,b){if(!a||!b)return false;if(a===b)return true;const na=(a.match(/\d+(?:\.\d+)?/g)||[]).join(','),nb=(b.match(/\d+(?:\.\d+)?/g)||[]).join(',');if(na!==nb)return false;
+const fa=a.match(FORM_WORD)||[],fb=b.match(FORM_WORD)||[];if(fa.length&&fb.length&&!fa.some(f=>fb.includes(f)))return false;
+const la=a.replace(FORM_WORD,' ').replace(/[^A-Z]/g,''),lb=b.replace(FORM_WORD,' ').replace(/[^A-Z]/g,'');if(la.length<3||lb.length<3)return false;return 1-BillParser.lev(la,lb)/Math.max(la.length,lb.length)>=0.8}
 const keyOf=m=>m.key||(m.key=medKey(m.name));
 const normBatch=s=>String(s||'').toUpperCase().replace(/[^A-Z0-9\-\/]/g,'');
 function packsSold(it,lots){const q=+it.quantity||0;if(!q)return 0;const lotPack=+(lots.find(l=>+l.pack_n>0)||{}).pack_n||0,pn=+it.pack_n||lotPack;if(pn===1)return q;
@@ -1191,30 +1223,36 @@ if(b.type=='medicine_purchase'){const units=r3((+i.quantity||0)+(+i.free||0));if
 if(m){m.qty=r3((+m.qty||0)+units);m.expiry=okDate(i.expiry_date)?i.expiry_date:m.expiry;m.manufacture_date=okDate(i.manufacture_date)?i.manufacture_date:m.manufacture_date;m.supplier=b.party||m.supplier;if(+i.pack_n)m.pack_n=+i.pack_n;if(+i.mrp)m.mrp=+i.mrp}
 else{m={id:uid(),name:n,key:k,batch:bt,qty:units,pack_n:+i.pack_n||'',mrp:+i.mrp||'',rate:+i.rate||'',manufacture_date:okDate(i.manufacture_date)?i.manufacture_date:'',expiry:okDate(i.expiry_date)?i.expiry_date:'',supplier:b.party};S.meds.push(m)}
 effect.added=r3(effect.added+units);effect.movements.push({direction:'in',lot:m.id,name:m.name,batch:m.batch,quantity:units,manufacture_date:m.manufacture_date,expiry:m.expiry})}
-else{const lots=S.meds.filter(x=>sameMed(keyOf(x),k)),rank=x=>{const xb=normBatch(x.batch);return !bt||!xb?2:xb==bt?0:BillParser.lev(xb,bt)<=1?1:2},avail=lots.filter(x=>(+x.qty||0)>0).sort((x,y)=>rank(x)-rank(y)||byExp(x,y));
+else{const lots=S.meds.filter(x=>sameMed(keyOf(x),k)),rank=x=>{const xb=normBatch(x.batch);return !bt||!xb?2:xb==bt?0:BillParser.lev(xb,bt)<=1?1:2},avail=lots.filter(x=>(+x.qty||0)>0).sort((x,y)=>rank(x)-rank(y)||(st(x)=='exp')-(st(y)=='exp')||byExp(x,y));
 let left=r3(packsSold(i,lots));if(left<=0)continue;
 for(const m of avail){if(left<=0)break;const moved=r3(Math.min(+m.qty,left));if(moved<=0)continue;m.qty=r3(m.qty-moved);left=r3(left-moved);effect.removed=r3(effect.removed+moved);effect.movements.push({direction:'out',lot:m.id,name:m.name,batch:m.batch,quantity:moved,manufacture_date:m.manufacture_date||'',expiry:m.expiry||''})}
 if(left>0.0005)effect.shortage.push({name:n,quantity:left})}}
 return effect}
-function reverseStock(b){if(!TYPES[b.type]?.med)return'';if(!Array.isArray(b.stock_movements))return'This older bill has no saved stock-movement history, so it cannot be changed safely.';
+function reverseStock(b,loose){if(!TYPES[b.type]?.med)return'';if(!Array.isArray(b.stock_movements))return'This older bill has no saved stock-movement history, so it cannot be changed safely.';
 for(const m of b.stock_movements){const lot=S.meds.find(x=>x.id&&x.id===m.lot)||S.meds.find(x=>sameMed(keyOf(x),medKey(m.name))&&normBatch(x.batch)==normBatch(m.batch));
-if(m.direction=='in'){if(!lot||(+lot.qty||0)<m.quantity-0.0005)return`Cannot take back ${m.quantity} of ${m.name}: some of that stock has already been sold.`;lot.qty=r3(lot.qty-m.quantity)}
+if(m.direction=='in'){if(!lot||!loose&&(+lot.qty||0)<m.quantity-0.0005)return`Cannot take back ${m.quantity} of ${m.name}: some of that stock has already been sold.`;lot.qty=r3(lot.qty-m.quantity)}
 else if(m.direction=='out'){if(lot)lot.qty=r3((+lot.qty||0)+m.quantity);else S.meds.push({id:uid(),name:m.name,key:medKey(m.name),batch:m.batch||'',qty:m.quantity,pack_n:'',mrp:'',manufacture_date:m.manufacture_date||'',expiry:m.expiry||'',supplier:b.party})}}return''}
-function saveTyped(e,items,total){const d={bill_number:String(e.bill_number||'').trim(),bill_date:okDate(e.bill_date)?e.bill_date:'',total_amount:total,items,warnings:[]},party=String(e.party).trim(),dup=findDuplicate(d,S.file?.hash||'',party);if(dup)return S.msg=`This bill is already saved${dup.bill_number?' (bill no. '+dup.bill_number+')':''}.`,render();
-const b={id:uid(),type:e.type,bill_number:d.bill_number,bill_date:d.bill_date,party,ref:'',mode:String(e.mode||'').trim(),total:r2(total),tax:+parseNumber(e.tax)||0,disc:+parseNumber(e.disc)||0,notes:'',items,file:S.file?{name:S.file.name,type:S.file.type,kind:S.file.kind,hash:S.file.hash||'',rot:S.file.rot||0,url:'',stored:false}:null,by:S.user.name,at:new Date().toISOString(),warnings:[],read:{source:'typed'}};
+async function saveTyped(e,items,total){const d={bill_number:String(e.bill_number||'').trim(),bill_date:okDate(e.bill_date)?e.bill_date:'',total_amount:total,items,warnings:[]},party=String(e.party).trim(),dup=findDuplicate(d,S.file?.hash||'',party);if(dup)return S.msg=`This bill is already saved${dup.bill_number?' (bill no. '+dup.bill_number+')':''}.`,render();
+const b={id:uid(),type:e.type,bill_number:d.bill_number,bill_date:d.bill_date,party,ref:'',mode:String(e.mode||'').trim(),total:r2(total),tax:+parseNumber(e.tax)||0,disc:+parseNumber(e.disc)||0,items,file:S.file?{name:S.file.name,type:S.file.type,kind:S.file.kind,hash:S.file.hash||'',rot:S.file.rot||0,url:'',stored:false}:null,by:S.user.name,at:new Date().toISOString(),warnings:[],read:{source:'typed'}};
 const oldBills=S.bills.slice(),oldMeds=S.meds.map(m=>({...m})),oldImpact=S.lastUpload,mv=stock(b);b.stock_movements=mv.movements;S.bills.unshift(b);S.lastUpload={id:b.id,bill_number:b.bill_number,type:b.type,impact:impactOf(b,mv),shortage:shortageOf(b,mv),warnings:[]};
-if(!persist()){S.bills=oldBills;S.meds=oldMeds;S.lastUpload=oldImpact;S.msg='Could not save this bill in browser storage. Free some space and try again.';return render()}
+S.busy=1;const ok=await persist();S.busy=0;if(!ok){S.bills=oldBills;S.meds=oldMeds;S.lastUpload=oldImpact;S.msg='Could not save this bill in browser storage. Free some space and try again.';return render()}
 const src=S.file?.source;if(S.file?.url)URL.revokeObjectURL(S.file.url);keepOriginal(b,src);S.file=null;S.edit=null;S.draft=null;S.partyName='';S.flow='choose';go('home');toast(`Bill saved: ${inr(b.total)} ${TYPES[b.type].money}`)}
+const restoreBill=(b,old,file)=>{for(const k of Object.keys(b))if(!(k in old))delete b[k];Object.assign(b,old,{file})};
 const cleanItem=i=>{const n=v=>{const x=parseNumber(v);return x===''?'':x};return{description:String(i.description||'').trim(),batch_no:normBatch(i.batch_no),manufacture_date:okDate(i.manufacture_date)?i.manufacture_date:'',expiry_date:okDate(i.expiry_date)?i.expiry_date:'',quantity:n(i.quantity),free:n(i.free),pack:i.pack||'',pack_n:+i.pack_n||'',mrp:n(i.mrp),rate:n(i.rate),disc:n(i.disc),gst:n(i.gst),amount:n(i.amount)}};
 function impactOf(b,mv){const T=TYPES[b.type],parts=[`${T?(T.money=='expense'?'Added to expenses':'Added to revenue'):'Saved (no type)'}: ${inr(b.total)}`];if(mv.added)parts.push(`Stock added: ${+mv.added.toFixed(2)} units of ${new Set(mv.movements.map(m=>m.lot)).size} medicines`);if(mv.removed)parts.push(`Stock reduced: ${+mv.removed.toFixed(2)} packs`);return parts.join(' · ')}
 function shortageOf(b,mv){return mv.shortage.length?mv.shortage.map(x=>`${x.name}: ${+x.quantity.toFixed(2)} was not in stock`).join('; '):TYPES[b.type]?.med&&!mv.added&&!mv.removed?'No medicine quantities were found, so stock was not changed.':''}
-async function keepOriginal(b,src){try{if(!src||!b.file)return;let blob=null;if(b.file.kind=='image'){const{img,done}=await loadImageEl(src);try{blob=await BillImage.thumbnail(img,b.file.rot||0)}finally{done()}}else if(src.size<=8*1024*1024)blob=src;if(!blob)return;await IDB.put(b.id,blob);b.file.stored=true;persist();if(S.view=='detail'&&S.detail==b.id)loadOriginal()}catch{}}
-async function loadOriginal(){const b=S.bills.find(x=>x.id==S.detail);if(!b?.file?.stored||S.img[b.id])return;try{const blob=await IDB.get(b.id);if(!blob)return;S.img[b.id]=URL.createObjectURL(blob);if(S.view=='detail'&&S.detail==b.id)render()}catch{}}
+async function keepOriginal(b,src){try{if(!src||!b.file)return;let blob=null;if(b.file.kind=='image'){const{img,done}=await loadImageEl(src);try{blob=await BillImage.thumbnail(img,b.file.rot||0)}finally{done()}}else if(src.size<=8*1024*1024)blob=src;if(!blob)return;await IDB.put(b.id,blob);if(!S.bills.some(x=>x.id==b.id)){IDB.del(b.id).catch(()=>{});return}b.file.stored=true;persist();if(S.view=='detail'&&S.detail==b.id)loadOriginal()}catch{}}
+async function loadOriginal(){const b=S.bills.find(x=>x.id==S.detail);if(!b?.file?.stored||S.img[b.id])return;try{const blob=await IDB.get(b.id);if(!blob)return;for(const k in S.img){URL.revokeObjectURL(S.img[k]);delete S.img[k]}S.img[b.id]=URL.createObjectURL(blob);if(S.view=='detail'&&S.detail==b.id)render()}catch{}}
 
 const A={
 mode(d){S.mode=d.m;S.msg='';render()},eye(){S.pw=!S.pw;render()},
-auth(){const a=S.auth,up=S.mode=='up';if(up&&!a.name.trim())return S.msg='Please tell us your full name.',render();if(!/^\S+@\S+\.\S+$/.test(a.email))return S.msg='Please enter a valid email address.',render();if(a.pw.length<6)return S.msg='Your password needs at least 6 characters.',render();if(up&&a.pw!=a.pw2)return S.msg='The two passwords do not match.',render();
-const nm=up?a.name.trim():a.email.split('@')[0].replace(/^./,c=>c.toUpperCase());S.user={name:nm,email:a.email.trim(),admin:true};try{localStorage.setItem(SESSION_KEY,JSON.stringify(S.user))}catch{}S.auth={name:'',email:'',pw:'',pw2:''};S.flow='choose';S.view=savedNames().length?'home':'new';S.msg='';render()},
+async auth(){const a=S.auth,up=S.mode=='up',email=a.email.trim(),key=email.toLowerCase();if(up&&!a.name.trim())return S.msg='Please tell us your full name.',render();if(!/^\S+@\S+\.\S+$/.test(email))return S.msg='Please enter a valid email address.',render();if(a.pw.length<6)return S.msg='Your password needs at least 6 characters.',render();if(up&&a.pw!=a.pw2)return S.msg='The two passwords do not match.',render();
+if(!window.crypto?.subtle)return S.msg='Signing in needs a secure connection. Open the app from its https:// address.',render();
+const all=accounts();let acc=all[key];S.busy=1;
+try{if(up){if(acc)return S.msg='An account with this email already exists on this device. Sign in instead.',render();const salt=crypto.getRandomValues(new Uint8Array(16));acc={name:a.name.trim(),email,salt:b64(salt),iter:150000};acc.hash=await pwHash(a.pw,salt,acc.iter);all[key]=acc;try{localStorage.setItem(ACCOUNTS_KEY,JSON.stringify(all))}catch{return S.msg='Could not save your account in this browser. Free some space and try again.',render()}}
+else{if(!acc)return S.msg='No account with this email on this device. Tap Create account first.',render();if(await pwHash(a.pw,unb64(acc.salt),acc.iter)!==acc.hash)return S.msg='Wrong password. Try again.',render()}}
+catch{return S.msg='Could not check the password in this browser. Try again.',render()}finally{S.busy=0}
+S.user={name:acc.name,email:acc.email,admin:true};try{localStorage.setItem(SESSION_KEY,JSON.stringify(S.user))}catch{}S.auth={name:'',email:'',pw:'',pw2:''};S.flow='choose';S.view=savedNames().length?'home':'new';S.msg='';render()},
 go(d){if(d.v=='new'){S.view='new';S.flow='choose';S.msg='';return render()}go(d.v)},
 newbill(){S.type='general';S.flow='choose';S.partyName='';S.selectedName='';if(S.file?.url)URL.revokeObjectURL(S.file.url);S.file=null;go('new')},
 backChoose(){S.flow='choose';S.msg='';render()},
@@ -1226,34 +1264,36 @@ continueExisting(){if(!savedNames().includes(S.selectedName))return S.msg='Choos
 rotate(){if(S.file){S.file.rot=((S.file.rot||0)+1)%4;render()}},
 rmfile(){if(S.file?.url)URL.revokeObjectURL(S.file.url);S.file=null;render()},chooseAgain(){if(S.file?.url)URL.revokeObjectURL(S.file.url);S.file=null;S.run=0;S.bad=0;S.dup=null;go('upload')},submit(){startRead()},
 pickType(d){S.type=d.t;render()},cancelKind(){S.draft=null;go('upload')},saveKind(){if(!TYPES[S.type])return;A.save()},
-save(){const d=S.draft,T=TYPES[S.type];if(!d)return go('home');const party=S.partyName.trim();
+async save(){const d=S.draft,T=TYPES[S.type];if(!d)return go('home');const party=S.partyName.trim();
 const hasAmount=parseNumber(d.total_amount)!==''||d.items.some(i=>parseNumber(i.amount)!=='');const total=billAmount(d);
 if(!hasAmount||!Number.isFinite(total)||total<=0){S.run=0;S.bad=1;S.view='proc';S.ocrMessage='The bill amount could not be read. This bill was not saved. Take a clearer photo or edit the file and try again.';return render()}
-const b={id:uid(),type:T?S.type:'general',bill_number:String(d.bill_number||'').trim(),bill_date:okDate(d.bill_date)?d.bill_date:'',party,ref:String(d.party_ref||'').trim(),mode:String(d.payment_mode||'').trim(),total:r2(total),tax:+d.tax_amount||0,disc:+d.discount_amount||0,notes:String(d.text||'').slice(0,4000),items:d.items.map(cleanItem).filter(i=>i.description),file:S.file?{name:S.file.name,type:S.file.type,kind:S.file.kind,hash:S.file.hash||'',rot:S.file.rot||0,source:S.file.source,url:S.file.url||'',stored:false}:null,by:S.user.name,at:new Date().toISOString(),warnings:d.warnings||[],read:d.read||{}};
+const b={id:uid(),type:T?S.type:'general',bill_number:String(d.bill_number||'').trim(),bill_date:okDate(d.bill_date)?d.bill_date:'',party,ref:String(d.party_ref||'').trim(),mode:String(d.payment_mode||'').trim(),total:r2(total),tax:+d.tax_amount||0,disc:+d.discount_amount||0,items:d.items.map(cleanItem).filter(i=>i.description),file:S.file?{name:S.file.name,type:S.file.type,kind:S.file.kind,hash:S.file.hash||'',rot:S.file.rot||0,source:S.file.source,url:S.file.url||'',stored:false}:null,by:S.user.name,at:new Date().toISOString(),warnings:d.warnings||[],read:d.read||{}};
 const oldBills=S.bills.slice(),oldMeds=S.meds.map(m=>({...m})),oldImpact=S.lastUpload,mv=stock(b);b.stock_movements=mv.movements;
 S.bills.unshift(b);S.lastUpload={id:b.id,bill_number:b.bill_number,type:b.type,impact:impactOf(b,mv),shortage:shortageOf(b,mv),warnings:b.warnings};
-if(!persist()){S.bills=oldBills;S.meds=oldMeds;S.lastUpload=oldImpact;S.run=0;S.bad=1;S.view='proc';S.step=3;S.ocrMessage='Could not save this bill in browser storage. Free some space and try again.';return render()}
+S.busy=1;const ok=await persist();S.busy=0;if(!ok){S.bills=oldBills;S.meds=oldMeds;S.lastUpload=oldImpact;S.run=0;S.bad=1;S.view='proc';S.step=3;S.ocrMessage='Could not save this bill in browser storage. Free some space and try again.';return render()}
 const src=b.file?.source;if(b.file){delete b.file.source;if(b.file.url)URL.revokeObjectURL(b.file.url);b.file.url=''}keepOriginal(b,src);
 S.file=null;S.draft=null;S.partyName='';S.flow='choose';go('home');toast(`Bill saved: ${inr(b.total)} ${T?.money=='revenue'?'revenue':'expense'}`)},
 open(d){S.detail=d.id;S.msg='';go('detail')},ask(){S.ask=1;S.msg='';render()},noask(){S.ask=0;S.msg='';render()},
-del(){const bill=S.bills.find(b=>b.id==S.detail);if(!bill)return go('home');const oldBills=S.bills.slice(),oldMeds=S.meds.map(m=>({...m})),oldImpact=S.lastUpload,issue=reverseStock(bill);if(issue){S.meds=oldMeds;S.msg=issue;return render()}S.bills=S.bills.filter(b=>b.id!=S.detail);if(S.lastUpload?.id==bill.id)S.lastUpload=null;if(!persist()){S.bills=oldBills;S.meds=oldMeds;S.lastUpload=oldImpact;S.msg='Could not save the deletion. Free space and try again.';return render()}IDB.del(bill.id).catch(()=>{});go('home');toast('Bill deleted and stock updated')},
+async del(){const bill=S.bills.find(b=>b.id==S.detail);if(!bill)return go('home');const oldBills=S.bills.slice(),oldMeds=S.meds.map(m=>({...m})),oldImpact=S.lastUpload,issue=reverseStock(bill);if(issue){S.meds=oldMeds;S.msg=issue;return render()}S.bills=S.bills.filter(b=>b.id!=S.detail);if(S.lastUpload?.id==bill.id)S.lastUpload=null;S.busy=1;const ok=await persist();S.busy=0;if(!ok){S.bills=oldBills;S.meds=oldMeds;S.lastUpload=oldImpact;S.msg='Could not save the deletion. Free space and try again.';return render()}IDB.del(bill.id).catch(()=>{});if(S.img[bill.id]){URL.revokeObjectURL(S.img[bill.id]);delete S.img[bill.id]}go('home');toast('Bill deleted and stock updated')},
 edit(){const b=S.bills.find(x=>x.id==S.detail);if(!b)return go('home');S.edit=JSON.parse(JSON.stringify({id:b.id,type:TYPES[b.type]?b.type:'',party:b.party||'',bill_number:b.bill_number||'',bill_date:b.bill_date||'',total:b.total??'',tax:b.tax??'',disc:b.disc??'',mode:b.mode||'',items:b.items.map(i=>({...i}))}));go('edit')},
 cancelEdit(){const n=S.edit?.isNew;S.edit=null;go(n?'upload':'detail')},
 manual(){const t=new Date(),iso=`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;S.run=0;S.bad=0;S.edit={id:null,isNew:true,type:priorType(S.partyName)||'',party:S.partyName,bill_number:'',bill_date:iso,total:'',tax:'',disc:'',mode:'',items:[{description:'',batch_no:'',manufacture_date:'',expiry_date:'',quantity:1,free:'',mrp:'',rate:'',amount:''}]};S.msg='';go('edit')},
 addItem(){S.edit.items.push({description:'',batch_no:'',manufacture_date:'',expiry_date:'',quantity:1,free:'',mrp:'',rate:'',amount:''});render()},
 rmItem(d){S.edit.items.splice(+d.i,1);render()},
-saveEdit(){const e=S.edit;if(!e)return go('home');if(!TYPES[e.type])return S.msg='Choose the bill type.',render();if(!String(e.party).trim())return S.msg='Enter the name on the bill.',render();
+async saveEdit(){const e=S.edit;if(!e)return go('home');if(!TYPES[e.type])return S.msg='Choose the bill type.',render();if(!String(e.party).trim())return S.msg='Enter the name on the bill.',render();
 const items=e.items.map(cleanItem).filter(i=>i.description);let total=parseNumber(e.total);if(total===''||total<=0)total=r2(items.reduce((s,i)=>s+(+i.amount||0),0)+(+parseNumber(e.tax)||0)-(+parseNumber(e.disc)||0));if(!(total>0))return S.msg='Enter the bill total.',render();
 if(e.isNew)return saveTyped(e,items,total);const b=S.bills.find(x=>x.id==e.id);if(!b)return go('home');
-const oldMeds=S.meds.map(m=>({...m})),oldBill=JSON.parse(JSON.stringify({...b,file:null})),file=b.file,issue=b.stock_movements?reverseStock(b):'';if(issue){S.meds=oldMeds;S.msg=issue;return render()}
+const oldMeds=S.meds.map(m=>({...m})),oldBill=JSON.parse(JSON.stringify({...b,file:null})),file=b.file,legacy=!!TYPES[b.type]?.med&&!Array.isArray(b.stock_movements),issue=b.stock_movements?reverseStock(b,true):'';if(issue){S.meds=oldMeds;S.msg=issue;return render()}
 Object.assign(b,{type:e.type,party:String(e.party).trim(),bill_number:String(e.bill_number||'').trim(),bill_date:okDate(e.bill_date)?e.bill_date:'',total:r2(total),tax:+parseNumber(e.tax)||0,disc:+parseNumber(e.disc)||0,mode:String(e.mode||'').trim(),items,warnings:[],edited_at:new Date().toISOString(),edited_by:S.user.name});
-const mv=stock(b);b.stock_movements=mv.movements;if(S.lastUpload?.id==b.id)S.lastUpload={...S.lastUpload,type:b.type,impact:impactOf(b,mv),shortage:shortageOf(b,mv),warnings:[]};
-if(!persist()){S.meds=oldMeds;Object.assign(b,oldBill,{file});S.msg='Could not save the changes. Free space and try again.';return render()}
-S.edit=null;S.detail=b.id;go('detail');toast('Bill corrected. Stock and totals updated')},
+const mv=legacy?{added:0,removed:0,shortage:[],movements:[]}:stock(b);
+const neg=S.meds.find(m=>(+m.qty||0)<-0.0005&&(+m.qty||0)<(+(oldMeds.find(o=>o.id===m.id)||{}).qty||0)-0.0005);if(neg){S.meds=oldMeds;restoreBill(b,oldBill,file);S.msg=`Cannot reduce ${neg.name}${neg.batch?' (batch '+neg.batch+')':''}: some of that stock has already been sold.`;return render()}
+if(!legacy)b.stock_movements=mv.movements;if(S.lastUpload?.id==b.id)S.lastUpload={...S.lastUpload,type:b.type,impact:impactOf(b,mv),shortage:shortageOf(b,mv),warnings:[]};
+S.busy=1;const ok=await persist();S.busy=0;if(!ok){S.meds=oldMeds;restoreBill(b,oldBill,file);S.msg='Could not save the changes. Free space and try again.';return render()}
+S.edit=null;S.detail=b.id;go('detail');toast(legacy?'Bill corrected. Stock was not changed because this older bill has no stock history':'Bill corrected. Stock and totals updated')},
 mf(d){S.mf=d.f;render()},rep(d){S.rep=d.r;render()},repgo(d){S.rep=d.r;go('reports')},export(){exportReport()},addmed(){S.sheet=1;S.msg='';render()},closemed(){S.sheet=0;render()},
-savemed(){const fm=S.mform,n=fm.name.trim(),q=parseNumber(fm.qty);if(!n||!(q>0))return S.msg='Please add the medicine name and a quantity.',render();const k=medKey(n),bt=normBatch(fm.batch),m=S.meds.find(x=>sameMed(keyOf(x),k)&&normBatch(x.batch)==bt),oldMeds=S.meds.map(x=>({...x}));if(m){m.qty=r3((+m.qty||0)+q);m.manufacture_date=fm.manufacture_date||m.manufacture_date;m.expiry=fm.expiry||m.expiry}else S.meds.push({id:uid(),name:n,key:k,batch:bt,qty:q,pack_n:'',mrp:'',manufacture_date:fm.manufacture_date,expiry:fm.expiry,supplier:fm.supplier.trim()});if(!persist()){S.meds=oldMeds;return S.msg='Could not save medicine in browser storage. Free space and try again.',render()}S.mform={name:'',batch:'',qty:'',manufacture_date:'',expiry:'',supplier:''};S.sheet=0;render();toast('Medicine added')},
+async savemed(){const fm=S.mform,n=fm.name.trim(),q=parseNumber(fm.qty);if(!n||!(q>0))return S.msg='Please add the medicine name and a quantity.',render();const k=medKey(n),bt=normBatch(fm.batch),m=S.meds.find(x=>sameMed(keyOf(x),k)&&normBatch(x.batch)==bt),oldMeds=S.meds.map(x=>({...x}));if(m){m.qty=r3((+m.qty||0)+q);m.manufacture_date=fm.manufacture_date||m.manufacture_date;m.expiry=fm.expiry||m.expiry}else S.meds.push({id:uid(),name:n,key:k,batch:bt,qty:q,pack_n:'',mrp:'',manufacture_date:fm.manufacture_date,expiry:fm.expiry,supplier:fm.supplier.trim()});S.busy=1;const ok=await persist();S.busy=0;if(!ok){S.meds=oldMeds;return S.msg='Could not save medicine in browser storage. Free space and try again.',render()}S.mform={name:'',batch:'',qty:'',manufacture_date:'',expiry:'',supplier:''};S.sheet=0;render();toast('Medicine added')},
 out(){try{localStorage.removeItem(SESSION_KEY)}catch{}S.user=null;S.auth={name:'',email:'',pw:'',pw2:''};go('login')}};
-document.addEventListener('click',e=>{const a=e.target.closest('[data-a]');if(a&&A[a.dataset.a]&&!a.disabled)A[a.dataset.a](a.dataset)});
+document.addEventListener('click',e=>{const a=e.target.closest('[data-a]');if(a&&A[a.dataset.a]&&!a.disabled&&!S.busy)A[a.dataset.a](a.dataset)});
 document.addEventListener('input',e=>{const k=e.target.dataset.k;if(!k)return;const p=k.split('.');if(p.length==1)S[p[0]]=e.target.value;else{let o=S[p[0]];for(let j=1;j<p.length-1;j++)o=o[p[j]];o[p[p.length-1]]=e.target.value}if(k=='partyName'){const button=$('[data-a="continueName"]');if(button)button.disabled=!e.target.value.trim();saveFlow()}
 if(e.target.dataset.re)render();
 if(k=='f.mq'){$('#ml').innerHTML=medList();window.lucide&&lucide.createIcons()}if(k=='f.bq'&&$('#bl')){$('#bl').innerHTML=billsHtml();window.lucide&&lucide.createIcons()}});
@@ -1265,1151 +1305,10 @@ if(S.file?.url)URL.revokeObjectURL(S.file.url);S.msg='';S.file={name:fl.name,typ
 document.addEventListener('dragover',e=>{if(e.target.closest('#drop')){e.preventDefault();$('#drop').classList.add('over')}});
 document.addEventListener('dragleave',e=>{if($('#drop'))$('#drop').classList.remove('over')});
 document.addEventListener('drop',e=>{if(!e.target.closest('#drop'))return;e.preventDefault();const fl=e.dataTransfer.files[0];if(fl){const t=new DataTransfer();t.items.add(fl);$('#f4').files=t.files;$('#f4').dispatchEvent(new Event('change',{bubbles:true}))}});
-try{const saved=JSON.parse(localStorage.getItem(STORE_KEY)||'{}');if(Array.isArray(saved.bills))S.bills=saved.bills.map(b=>({...b,items:Array.isArray(b.items)?b.items:[]}));if(Array.isArray(saved.meds))S.meds=saved.meds.map(m=>({...m,id:m.id||uid()}));S.lastUpload=saved.lastUpload||null}catch{}
+try{DATA.chan=new BroadcastChannel('rxpx-data');DATA.chan.onmessage=()=>reloadData()}catch{}
+window.addEventListener('storage',e=>{if(e.key===STORE_KEY&&!DATA.idb)reloadData()});
+(async()=>{await loadData();
 try{const u=JSON.parse(localStorage.getItem(SESSION_KEY)||'null');if(u&&u.name&&u.email){S.user=u;S.flow='choose';S.view=savedNames().length?'home':'new';const fl=JSON.parse(sessionStorage.getItem(FLOW_KEY)||'null');if(fl&&['new','upload'].includes(fl.view)){S.view=fl.view;S.flow=fl.flow||'choose';S.partyName=fl.partyName||'';S.selectedName=fl.selectedName||'';if(S.view=='upload'&&!S.partyName)S.view='new'}}}catch{}
-S.draft=null;render();
+S.draft=null;render()})();
 
 </script></body></html>
-
-
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#ff7a00">
-  <title>RxPx Bills</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@600;700;800&display=swap" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <style>
-    :root {
-      --ink:#161616; --muted:#6b6b6b; --line:#e9e7e4; --soft:#f8f7f5;
-      --orange:#ff7a00; --orange-soft:#fff0df; --green:#15754b; --green-soft:#e8f7ef;
-      --red:#b42318; --red-soft:#ffebe9; --amber:#9a5b00; --amber-soft:#fff5dc;
-      --blue:#2463b5; --radius:18px; --shadow:0 12px 34px rgba(24,20,14,.08);
-    }
-    * { box-sizing:border-box; }
-    html { background:#fff; }
-    body { margin:0; min-width:320px; color:var(--ink); background:#fff; font:15px/1.5 "DM Sans",system-ui,sans-serif; }
-    button,input,select,textarea { font:inherit; }
-    button { cursor:pointer; }
-    button:disabled { cursor:not-allowed; opacity:.45; }
-    button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible { outline:3px solid rgba(255,122,0,.28); outline-offset:2px; }
-    h1,h2,h3,p { margin:0; }
-    h1,h2,h3 { font-family:Poppins,"DM Sans",sans-serif; letter-spacing:-.025em; }
-    h1 { font-size:clamp(27px,4vw,40px); line-height:1.15; }
-    h2 { font-size:22px; line-height:1.25; }
-    h3 { font-size:16px; }
-    a { color:inherit; }
-    .shell { min-height:100vh; background:linear-gradient(180deg,#fff 0,#fff 55%,#fff8f1 100%); }
-    .brand { display:inline-flex; align-items:center; gap:10px; font:800 24px/1 Poppins,sans-serif; letter-spacing:-.07em; text-decoration:none; }
-    .brand-mark { width:38px; height:38px; border-radius:12px; display:grid; place-items:center; color:#fff; background:var(--ink); box-shadow:inset 0 0 0 3px var(--orange); font-size:15px; letter-spacing:-.1em; }
-    .brand small { display:block; margin-top:4px; color:var(--muted); font:700 9px/1 Poppins,sans-serif; letter-spacing:.24em; }
-    .topbar { height:76px; display:flex; align-items:center; justify-content:space-between; gap:18px; max-width:1220px; padding:0 28px; margin:auto; border-bottom:1px solid var(--line); }
-    .top-actions { display:flex; align-items:center; gap:12px; }
-    .user-chip { max-width:230px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding:8px 11px; border:1px solid var(--line); border-radius:999px; color:var(--muted); font-size:13px; }
-    .page { width:min(1160px,calc(100% - 40px)); margin:0 auto; padding:40px 0 70px; }
-    .auth-wrap { min-height:100vh; display:grid; grid-template-columns:minmax(0,1.12fr) minmax(390px,.88fr); }
-    .auth-hero { min-height:100vh; padding:clamp(36px,7vw,96px); color:#fff; background:radial-gradient(circle at 85% 12%,#ffb25f 0,transparent 26%),linear-gradient(140deg,#151515 0%,#25211d 62%,#633a13 100%); display:flex; flex-direction:column; justify-content:space-between; }
-    .auth-hero .brand { color:#fff; }
-    .auth-hero .brand small { color:#ffd4a8; }
-    .hero-copy { max-width:570px; margin:70px 0; }
-    .hero-copy h1 { max-width:520px; font-size:clamp(36px,5vw,57px); }
-    .hero-copy p { max-width:500px; margin-top:20px; color:#eee7df; font-size:17px; }
-    .hero-points { display:grid; gap:13px; margin-top:34px; }
-    .hero-point { display:flex; align-items:center; gap:11px; color:#f7efe8; }
-    .tick { width:23px; height:23px; flex:none; display:grid; place-items:center; color:#191919; background:var(--orange); border-radius:50%; font-weight:800; font-size:13px; }
-    .auth-panel { display:grid; place-items:center; padding:32px; background:#fff; }
-    .auth-card { width:min(440px,100%); }
-    .eyebrow { margin-bottom:10px; color:var(--orange); font-weight:800; font-size:12px; letter-spacing:.12em; text-transform:uppercase; }
-    .sub { margin-top:9px; color:var(--muted); }
-    .tabs { display:flex; gap:5px; padding:5px; margin:31px 0 24px; background:var(--soft); border-radius:13px; }
-    .tabs button { flex:1; min-height:42px; border:0; border-radius:9px; color:var(--muted); background:transparent; font-weight:700; }
-    .tabs button.on { color:var(--ink); background:#fff; box-shadow:0 1px 4px rgba(0,0,0,.1); }
-    .field { display:block; margin-top:16px; font-weight:700; font-size:13px; }
-    .field span { display:block; margin-bottom:6px; }
-    .field input,.field select,.field textarea { width:100%; border:1px solid #dcd9d5; border-radius:11px; padding:12px 13px; color:var(--ink); background:#fff; font-weight:400; }
-    .field textarea { min-height:94px; resize:vertical; }
-    .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
-    .btn { min-height:45px; padding:0 16px; display:inline-flex; align-items:center; justify-content:center; gap:8px; border:1px solid var(--line); border-radius:12px; color:var(--ink); background:#fff; font-weight:800; text-decoration:none; transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease; }
-    .btn:hover:not(:disabled) { border-color:#c9c3bc; transform:translateY(-1px); box-shadow:0 5px 16px rgba(0,0,0,.06); }
-    .btn.primary { border-color:var(--orange); color:#fff; background:var(--orange); }
-    .btn.dark { border-color:var(--ink); color:#fff; background:var(--ink); }
-    .btn.danger { border-color:#f1b7b1; color:var(--red); background:#fff; }
-    .btn.wide { width:100%; margin-top:23px; }
-    .btn.small { min-height:36px; padding:0 12px; border-radius:10px; font-size:13px; }
-    .btn.link { padding:0; border:0; color:var(--blue); background:transparent; text-decoration:underline; box-shadow:none; transform:none; }
-    .muted { color:var(--muted); }
-    .fine { margin-top:18px; color:var(--muted); font-size:12px; line-height:1.6; }
-    .notice { display:flex; gap:10px; align-items:flex-start; margin:17px 0 0; padding:12px 13px; border-radius:12px; font-size:13px; }
-    .notice.info { color:#154a85; background:#eaf3ff; }
-    .notice.success { color:#0d6540; background:var(--green-soft); }
-    .notice.warn { color:#795000; background:var(--amber-soft); }
-    .notice.error { color:#8a2119; background:var(--red-soft); }
-    .notice b { display:block; margin-bottom:2px; }
-    .app-layout { min-height:calc(100vh - 76px); display:grid; grid-template-columns:220px minmax(0,1fr); max-width:1280px; margin:auto; }
-    .side { padding:26px 16px; border-right:1px solid var(--line); }
-    .side-label { padding:10px 12px; color:var(--muted); font-size:11px; font-weight:800; letter-spacing:.13em; text-transform:uppercase; }
-    .nav { display:grid; gap:4px; }
-    .nav button { display:flex; align-items:center; gap:11px; min-height:45px; padding:0 12px; border:0; border-radius:11px; color:var(--muted); background:transparent; text-align:left; font-weight:700; }
-    .nav button:hover { color:var(--ink); background:var(--soft); }
-    .nav button.on { color:var(--ink); background:var(--orange-soft); box-shadow:inset 3px 0 0 var(--orange); }
-    .nav-ico { width:22px; text-align:center; }
-    .content { min-width:0; padding:40px 40px 80px; }
-    .page-head { display:flex; justify-content:space-between; align-items:flex-start; gap:22px; margin-bottom:28px; }
-    .page-head > p { max-width:620px; margin-top:8px; color:var(--muted); }
-    .summary-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:15px; }
-    .summary { position:relative; min-height:126px; overflow:hidden; padding:20px; border:1px solid var(--line); border-radius:var(--radius); background:#fff; box-shadow:0 4px 16px rgba(0,0,0,.025); }
-    .summary:before { position:absolute; top:0; left:0; width:5px; height:100%; content:""; background:var(--orange); }
-    .summary.income:before { background:var(--green); }
-    .summary.expense:before { background:var(--red); }
-    .summary .label { color:var(--muted); font-size:13px; font-weight:700; }
-    .summary .amount { margin-top:10px; font:700 clamp(25px,3vw,33px)/1 Poppins,sans-serif; letter-spacing:-.04em; }
-    .summary .hint { margin-top:8px; color:var(--muted); font-size:12px; }
-    .dashboard-grid { display:grid; grid-template-columns:minmax(0,1.45fr) minmax(280px,.8fr); gap:17px; margin-top:18px; }
-    .card { border:1px solid var(--line); border-radius:var(--radius); background:#fff; box-shadow:0 4px 16px rgba(0,0,0,.025); }
-    .card-pad { padding:20px; }
-    .card-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; padding:20px 20px 0; }
-    .card-head p { margin-top:3px; color:var(--muted); font-size:13px; }
-    .chart-wrap { height:260px; padding:14px 18px 20px; }
-    .ledger-list { padding:12px 14px 16px; }
-    .ledger-row { width:100%; display:grid; grid-template-columns:minmax(0,1fr) auto; gap:12px; align-items:center; padding:14px 7px; border:0; border-bottom:1px solid var(--line); color:var(--ink); background:#fff; text-align:left; }
-    .ledger-row:last-child { border-bottom:0; }
-    .ledger-row:hover .ledger-name { color:var(--orange); }
-    .ledger-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:800; }
-    .ledger-meta { margin-top:3px; color:var(--muted); font-size:12px; }
-    .ledger-total { text-align:right; font-weight:800; }
-    .ledger-total.income { color:var(--green); }
-    .ledger-total.expense { color:var(--red); }
-    .activity { margin-top:18px; }
-    .bill-list { padding:4px 20px 16px; }
-    .bill-row { width:100%; display:grid; grid-template-columns:42px minmax(0,1fr) auto; align-items:center; gap:12px; padding:14px 2px; border:0; border-bottom:1px solid var(--line); color:var(--ink); background:#fff; text-align:left; }
-    .bill-row:last-child { border-bottom:0; }
-    .bill-row:hover .bill-name { color:var(--orange); }
-    .bill-badge { width:38px; height:38px; display:grid; place-items:center; border-radius:11px; color:var(--orange); background:var(--orange-soft); font-size:17px; }
-    .bill-badge.income { color:var(--green); background:var(--green-soft); }
-    .bill-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:800; }
-    .bill-meta { overflow:hidden; margin-top:3px; color:var(--muted); text-overflow:ellipsis; white-space:nowrap; font-size:12px; }
-    .bill-value { text-align:right; font-weight:800; }
-    .bill-value.income { color:var(--green); }
-    .bill-value.expense { color:var(--red); }
-    .choice-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:17px; max-width:850px; }
-    .choice { min-height:250px; padding:26px; border:1px solid var(--line); border-radius:20px; color:var(--ink); background:#fff; text-align:left; box-shadow:var(--shadow); }
-    .choice:not(:disabled):hover { border-color:var(--orange); transform:translateY(-3px); }
-    .choice:disabled { box-shadow:none; }
-    .choice-icon { width:52px; height:52px; display:grid; place-items:center; border-radius:15px; color:var(--orange); background:var(--orange-soft); font-size:25px; }
-    .choice h2 { margin-top:23px; }
-    .choice p { margin-top:8px; color:var(--muted); }
-    .choice small { display:block; margin-top:23px; color:var(--orange); font-weight:800; }
-    .ledger-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(245px,1fr)); gap:14px; }
-    .ledger-card { position:relative; min-height:170px; padding:20px; border:1px solid var(--line); border-radius:17px; color:var(--ink); background:#fff; text-align:left; box-shadow:0 4px 14px rgba(0,0,0,.025); }
-    .ledger-card:hover { border-color:var(--orange); }
-    .ledger-card h3 { margin-top:18px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .ledger-card p { margin-top:5px; color:var(--muted); font-size:13px; }
-    .ledger-card .net { position:absolute; bottom:18px; left:20px; color:var(--green); font-weight:800; }
-    .ledger-card .net.negative { color:var(--red); }
-    .empty { padding:48px 22px; border:1px dashed #d5d0ca; border-radius:18px; color:var(--muted); background:#fff; text-align:center; }
-    .empty .empty-icon { margin-bottom:10px; font-size:32px; }
-    .upload-layout { display:grid; grid-template-columns:minmax(0,1fr) minmax(300px,.72fr); gap:19px; align-items:start; max-width:1050px; }
-    .drop-zone { min-height:305px; padding:28px; display:grid; place-items:center; border:2px dashed #d7d1c9; border-radius:20px; background:linear-gradient(145deg,#fff,#fffaf5); text-align:center; }
-    .drop-zone.drag { border-color:var(--orange); background:var(--orange-soft); }
-    .drop-zone h2 { margin-top:13px; }
-    .drop-zone p { max-width:390px; margin:8px auto 20px; color:var(--muted); }
-    .upload-icon { width:67px; height:67px; display:grid; place-items:center; border-radius:20px; color:var(--orange); background:var(--orange-soft); font-size:32px; }
-    .upload-buttons { display:flex; flex-wrap:wrap; justify-content:center; gap:10px; }
-    input[type=file] { display:none; }
-    .file-card { overflow:hidden; }
-    .file-preview { min-height:180px; display:grid; place-items:center; overflow:hidden; background:var(--soft); }
-    .file-preview img { display:block; max-width:100%; max-height:290px; object-fit:contain; }
-    .pdf-mark { font-size:55px; }
-    .file-info { padding:16px; }
-    .file-info b,.file-info span { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .file-info span { margin-top:3px; color:var(--muted); font-size:12px; }
-    .scan-box { margin-top:17px; padding:15px; border-radius:14px; background:var(--soft); }
-    .scan-box .scan-top { display:flex; justify-content:space-between; gap:8px; color:var(--muted); font-size:13px; }
-    .progress { height:7px; overflow:hidden; margin-top:10px; border-radius:99px; background:#e6e2dc; }
-    .progress i { display:block; width:0; height:100%; border-radius:inherit; background:var(--orange); transition:width .2s ease; }
-    .review-wrap { max-width:1060px; }
-    .review-top { display:flex; justify-content:space-between; gap:17px; align-items:flex-start; margin-bottom:18px; }
-    .review-top .source { color:var(--muted); font-size:13px; }
-    .form-card { padding:23px; }
-    .form-section + .form-section { margin-top:27px; padding-top:23px; border-top:1px solid var(--line); }
-    .section-title { display:flex; align-items:center; justify-content:space-between; gap:12px; }
-    .section-title p { margin-top:3px; color:var(--muted); font-size:13px; }
-    .item-table-wrap { overflow:auto; margin-top:15px; border:1px solid var(--line); border-radius:13px; }
-    table { width:100%; min-width:720px; border-collapse:collapse; }
-    th,td { padding:10px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
-    th { color:var(--muted); background:var(--soft); font-size:11px; letter-spacing:.06em; text-transform:uppercase; }
-    tr:last-child td { border-bottom:0; }
-    td input { width:100%; min-width:70px; border:1px solid #ddd8d1; border-radius:8px; padding:8px; }
-    td .item-description { min-width:175px; }
-    .icon-button { width:31px; height:31px; display:grid; place-items:center; border:1px solid #efc5c1; border-radius:8px; color:var(--red); background:#fff; }
-    .checkline { display:flex; align-items:flex-start; gap:10px; margin-top:17px; padding:13px; border-radius:12px; background:#fff9f4; font-size:13px; }
-    .checkline input { width:17px; height:17px; flex:none; margin:2px 0 0; accent-color:var(--orange); }
-    .form-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:10px; margin-top:24px; }
-    .detail-layout { display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:18px; max-width:1050px; }
-    .detail-hero { padding:25px; }
-    .detail-kicker { color:var(--muted); font-size:13px; }
-    .detail-amount { margin-top:15px; font:700 42px/1 Poppins,sans-serif; letter-spacing:-.05em; }
-    .detail-amount.income { color:var(--green); }
-    .detail-amount.expense { color:var(--red); }
-    .details { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0; margin-top:26px; border-top:1px solid var(--line); }
-    .details div { padding:13px 12px 13px 0; border-bottom:1px solid var(--line); }
-    .details dt { color:var(--muted); font-size:11px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; }
-    .details dd { margin:4px 0 0; overflow-wrap:anywhere; font-weight:700; }
-    .detail-side { padding:20px; }
-    .detail-side > * + * { margin-top:11px; }
-    .pill { display:inline-flex; align-items:center; min-height:25px; padding:0 10px; border-radius:999px; color:var(--amber); background:var(--amber-soft); font-size:12px; font-weight:800; }
-    .pill.green { color:var(--green); background:var(--green-soft); }
-    .report-grid { display:grid; grid-template-columns:minmax(0,1fr) minmax(260px,.75fr); gap:18px; }
-    .report-stats { display:grid; gap:10px; padding:16px; }
-    .report-stat { display:flex; justify-content:space-between; gap:15px; padding:13px; border-radius:12px; background:var(--soft); }
-    .report-stat b { font-weight:800; }
-    .setup { width:min(800px,calc(100% - 40px)); margin:40px auto; }
-    .codebox { overflow:auto; max-height:310px; margin-top:16px; padding:15px; border-radius:13px; color:#eaeaea; background:#181818; font:12px/1.6 ui-monospace,SFMono-Regular,Consolas,monospace; white-space:pre; }
-    #toast { position:fixed; z-index:20; right:22px; bottom:22px; max-width:min(390px,calc(100% - 44px)); padding:13px 15px; border-radius:13px; color:#fff; background:#1d1d1d; box-shadow:0 14px 35px rgba(0,0,0,.2); font-weight:700; opacity:0; pointer-events:none; transform:translateY(14px); transition:.22s ease; }
-    #toast.show { opacity:1; transform:translateY(0); }
-    @media (max-width:900px) {
-      .auth-wrap { grid-template-columns:1fr; }
-      .auth-hero { min-height:auto; padding:34px 28px; }
-      .hero-copy { margin:42px 0 16px; }
-      .hero-points { display:none; }
-      .auth-panel { padding:45px 25px; }
-      .app-layout { grid-template-columns:1fr; }
-      .side { padding:10px 16px; overflow:auto; border-right:0; border-bottom:1px solid var(--line); }
-      .side-label { display:none; }
-      .nav { display:flex; min-width:max-content; }
-      .nav button { min-width:max-content; }
-      .content { padding:31px 24px 65px; }
-      .dashboard-grid,.upload-layout,.detail-layout,.report-grid { grid-template-columns:1fr; }
-      .detail-side { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
-      .detail-side > * + * { margin-top:0; }
-    }
-    @media (max-width:620px) {
-      .topbar { height:68px; padding:0 17px; }
-      .user-chip { display:none; }
-      .page { width:min(100% - 32px,1160px); padding-top:30px; }
-      .content { padding:25px 16px 55px; }
-      .page-head,.review-top { display:block; }
-      .page-head .btn { margin-top:16px; }
-      .summary-grid,.choice-grid,.grid2 { grid-template-columns:1fr; }
-      .summary { min-height:110px; }
-      .choice { min-height:205px; }
-      .form-card { padding:17px; }
-      .details { grid-template-columns:1fr; }
-      .detail-side { grid-template-columns:1fr; }
-      .form-actions { justify-content:stretch; }
-      .form-actions .btn { flex:1; }
-    }
-  </style>
-</head>
-<body>
-  <div id="app"></div>
-  <div id="toast" role="status" aria-live="polite"></div>
-  <script>
-  "use strict";
-
-  /*
-   * Paste the public values from your Supabase project's Connect dialog here.
-   * The anon/publishable key is safe in a browser only because supabase-setup.sql
-   * enables Row Level Security. Never put a service_role key in this file.
-   */
-  const APP_CONFIG = Object.freeze({
-    supabaseUrl: "",
-    supabaseAnonKey: "",
-    storageBucket: "bill-files"
-  });
-
-  const configured = /^https:\/\//.test(APP_CONFIG.supabaseUrl) && APP_CONFIG.supabaseAnonKey.trim().length > 20;
-  const db = configured && window.supabase ? window.supabase.createClient(APP_CONFIG.supabaseUrl, APP_CONFIG.supabaseAnonKey, {
-    auth: { persistSession:true, autoRefreshToken:true, detectSessionInUrl:true }
-  }) : null;
-
-  if (window.pdfjsLib) window.pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
-
-  function freshDraft() {
-    return {
-      billType:"expense", vendor:"", billNumber:"", billDate:new Date().toISOString().slice(0,10),
-      total:"", items:[], confidence:0
-    };
-  }
-
-  const state = {
-    user:null, view:"boot", authMode:"signin", ledgers:[], bills:[], activeLedger:null,
-    file:null, rawText:"", parsed:freshDraft(), duplicateBills:[], forceDuplicate:false,
-    busy:false, scanStatus:"", scanProgress:0, detailId:null, charts:[], message:""
-  };
-
-  const $ = function (selector, root) { return (root || document).querySelector(selector); };
-  const $$ = function (selector, root) { return Array.from((root || document).querySelectorAll(selector)); };
-  const escapeHtml = function (value) {
-    return String(value == null ? "" : value).replace(/[&<>"']/g, function (char) {
-      return ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" })[char];
-    });
-  };
-  const escapeAttr = escapeHtml;
-  const money = function (value) {
-    return new Intl.NumberFormat("en-IN", { style:"currency", currency:"INR", maximumFractionDigits:2 }).format(Number(value || 0));
-  };
-  const count = function (value, word) { return String(value) + " " + word + (Number(value) === 1 ? "" : "s"); };
-  const dateText = function (value, includeTime) {
-    if (!value) return "—";
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return escapeHtml(value);
-    return new Intl.DateTimeFormat("en-IN", {
-      day:"2-digit", month:"short", year:"numeric",
-      hour:includeTime ? "2-digit" : undefined,
-      minute:includeTime ? "2-digit" : undefined
-    }).format(date);
-  };
-  const fileSize = function (bytes) {
-    if (!bytes) return "0 B";
-    const units = ["B","KB","MB","GB"];
-    const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-    return (bytes / Math.pow(1024,index)).toFixed(index ? 1 : 0) + " " + units[index];
-  };
-  const ledgerFor = function (id) { return state.ledgers.find(function (ledger) { return ledger.id === id; }); };
-  const billFor = function (id) { return state.bills.find(function (bill) { return bill.id === id; }); };
-  const activeLedger = function () { return ledgerFor(state.activeLedger); };
-
-  function toast(message) {
-    const node = $("#toast");
-    node.textContent = message;
-    node.classList.add("show");
-    clearTimeout(toast.timer);
-    toast.timer = setTimeout(function () { node.classList.remove("show"); }, 4200);
-  }
-
-  function setMessage(kind, title, detail) {
-    state.message = { kind:kind, title:title, detail:detail || "" };
-  }
-
-  function messageHtml() {
-    if (!state.message) return "";
-    return '<div class="notice ' + escapeAttr(state.message.kind) + '"><div><b>' + escapeHtml(state.message.title) + '</b>' + escapeHtml(state.message.detail) + '</div></div>';
-  }
-
-  function button(label, action, extra) {
-    return '<button type="button" class="btn ' + (extra || "") + '" data-act="' + action + '">' + label + "</button>";
-  }
-
-  function renderBrand() {
-    return '<a class="brand" href="#" data-act="home"><span class="brand-mark">Rx</span><span>RxPx<small>HOSPITALS</small></span></a>';
-  }
-
-  function render() {
-    const app = $("#app");
-    if (state.view === "setup") app.innerHTML = setupView();
-    else if (state.view === "auth" || state.view === "boot") app.innerHTML = authView();
-    else app.innerHTML = appView();
-    if (state.view === "dashboard") setTimeout(drawCharts, 0);
-  }
-
-  function setupView() {
-    return '<main class="setup">' +
-      renderBrand() +
-      '<div class="card card-pad" style="margin-top:34px">' +
-        '<div class="eyebrow">One-time connection</div>' +
-        '<h1>Connect your secure data workspace</h1>' +
-        '<p class="sub">This app deliberately will not use browser-only accounts or shared local storage. Add your Supabase Project URL and publishable/anon key in <b>APP_CONFIG</b>, then run the supplied SQL file once.</p>' +
-        '<div class="notice warn"><div><b>Why setup is required</b>Real authentication, account isolation, database records, original bill files, and duplicate protection must be enforced by Supabase Row Level Security—not only by the browser.</div></div>' +
-        '<ol class="fine" style="padding-left:19px"><li>Create a Supabase project.</li><li>Run <b>supabase-setup.sql</b> in its SQL Editor.</li><li>Copy Project URL and the publishable/anon key from Connect, then fill APP_CONFIG near the top of this file.</li><li>Reload this page and create the first account.</li></ol>' +
-        '<div class="codebox">const APP_CONFIG = Object.freeze({\n  supabaseUrl: "https://YOUR-PROJECT.supabase.co",\n  supabaseAnonKey: "YOUR-PUBLISHABLE-OR-ANON-KEY",\n  storageBucket: "bill-files"\n});</div>' +
-      "</div></main>";
-  }
-
-  function authView() {
-    const signup = state.authMode === "signup";
-    return '<main class="auth-wrap">' +
-      '<section class="auth-hero">' +
-        renderBrand() +
-        '<div class="hero-copy"><div class="eyebrow" style="color:#ffb561">BILL INTELLIGENCE</div><h1>Every bill, clear enough to act on.</h1><p>Securely read, review, store, and understand bills for your hospital or pharmacy—without mixing one account’s records with another.</p><div class="hero-points"><div class="hero-point"><span class="tick">✓</span> OCR results always go through a review screen</div><div class="hero-point"><span class="tick">✓</span> Dashboard totals and charts update after every save</div><div class="hero-point"><span class="tick">✓</span> Duplicate bills are blocked unless you explicitly override</div></div></div>' +
-        '<p style="color:#d9cabe;font-size:12px">Your files and records are protected by Supabase authentication and Row Level Security.</p>' +
-      '</section>' +
-      '<section class="auth-panel"><div class="auth-card">' +
-        '<div class="eyebrow">' + (signup ? "Create your workspace" : "Welcome back") + '</div>' +
-        '<h1>' + (signup ? "Start securely" : "Sign in to your bills") + '</h1>' +
-        '<p class="sub">' + (signup ? "Use an email that can receive a confirmation link." : "Use the account that owns these bill records.") + '</p>' +
-        '<div class="tabs"><button class="' + (!signup ? "on" : "") + '" data-act="signinTab">Sign in</button><button class="' + (signup ? "on" : "") + '" data-act="signupTab">Sign up</button></div>' +
-        '<form data-form="auth">' +
-          (signup ? '<label class="field"><span>Full name</span><input name="name" autocomplete="name" required maxlength="100" placeholder="Your name"></label>' : "") +
-          '<label class="field"><span>Email address</span><input name="email" autocomplete="email" type="email" required placeholder="you@example.com"></label>' +
-          '<label class="field"><span>Password</span><input name="password" autocomplete="' + (signup ? "new-password" : "current-password") + '" type="password" minlength="8" required placeholder="At least 8 characters"></label>' +
-          (signup ? '<label class="field"><span>Confirm password</span><input name="confirmPassword" autocomplete="new-password" type="password" minlength="8" required placeholder="Repeat password"></label>' : "") +
-          messageHtml() +
-          '<button class="btn primary wide" type="submit">' + (signup ? "Create secure account" : "Sign in") + "</button>" +
-        '</form>' +
-        '<p class="fine">Only the public Supabase key belongs in this page. Your password is sent to Supabase Auth and is never stored by this app.</p>' +
-      "</div></section></main>";
-  }
-
-  function appView() {
-    return '<div class="shell"><header class="topbar">' + renderBrand() +
-      '<div class="top-actions"><span class="user-chip">' + escapeHtml(state.user && state.user.email || "") + '</span><button type="button" class="btn small" data-act="logout">Sign out</button></div>' +
-      '</header><main class="app-layout"><aside class="side"><div class="side-label">Workspace</div><nav class="nav">' +
-      navButton("dashboard","▦","Dashboard") + navButton("choose","＋","Add bill") + navButton("reports","◔","Reports & Excel") +
-      '</nav></aside><section class="content">' + pageContent() + "</section></main></div>";
-  }
-
-  function navButton(view, icon, label) {
-    const selected = (view === "choose" ? ["choose","new-ledger","existing-ledger","upload","review"].includes(state.view) : state.view === view);
-    return '<button class="' + (selected ? "on" : "") + '" data-act="route" data-view="' + view + '"><span class="nav-ico">' + icon + "</span>" + label + "</button>";
-  }
-
-  function pageContent() {
-    if (state.view === "dashboard") return dashboardView();
-    if (state.view === "choose") return chooseView();
-    if (state.view === "new-ledger") return newLedgerView();
-    if (state.view === "existing-ledger") return existingLedgerView();
-    if (state.view === "ledger") return ledgerView();
-    if (state.view === "upload") return uploadView();
-    if (state.view === "review") return reviewView();
-    if (state.view === "detail") return detailView();
-    if (state.view === "reports") return reportsView();
-    return dashboardView();
-  }
-
-  function pageHeader(title, text, action) {
-    return '<div class="page-head"><div><h1>' + title + '</h1><p>' + text + "</p></div>" + (action || "") + "</div>";
-  }
-
-  function totals() {
-    return state.bills.reduce(function (acc, bill) {
-      const total = Number(bill.total || 0);
-      if (bill.bill_type === "income") acc.income += total;
-      else acc.expense += total;
-      return acc;
-    }, { income:0, expense:0 });
-  }
-
-  function ledgerStats(id) {
-    return state.bills.filter(function (bill) { return bill.ledger_id === id; }).reduce(function (acc, bill) {
-      acc.count += 1;
-      if (bill.bill_type === "income") acc.income += Number(bill.total || 0);
-      else acc.expense += Number(bill.total || 0);
-      if (!acc.latest || new Date(bill.created_at) > new Date(acc.latest.created_at)) acc.latest = bill;
-      return acc;
-    }, { count:0, income:0, expense:0, latest:null });
-  }
-
-  function dashboardView() {
-    const sum = totals();
-    const balance = sum.income - sum.expense;
-    const recent = state.bills.slice(0,8);
-    return pageHeader("Dashboard", "A simple, current view of every bill saved to this account.", '<button class="btn primary" data-act="route" data-view="choose">Add a bill</button>') +
-      '<div class="summary-grid">' +
-        summaryCard("Income",money(sum.income),count(state.bills.filter(function (b) { return b.bill_type === "income"; }).length,"income bill"),"income") +
-        summaryCard("Expenses",money(sum.expense),count(state.bills.filter(function (b) { return b.bill_type !== "income"; }).length,"expense bill"),"expense") +
-        summaryCard("Net balance",money(balance),balance >= 0 ? "Income minus expenses" : "Expenses exceed income","") +
-      '</div>' +
-      '<div class="dashboard-grid"><section class="card"><div class="card-head"><div><h2>Money movement</h2><p>Income, expenses, and current net amount</p></div></div><div class="chart-wrap"><canvas id="moneyChart" aria-label="Income versus expenses chart"></canvas></div></section>' +
-      '<section class="card"><div class="card-head"><div><h2>Bill groups</h2><p>Open a name to see its bills</p></div><button class="btn small" data-act="route" data-view="choose">Add</button></div><div class="ledger-list">' +
-        (state.ledgers.length ? state.ledgers.slice(0,6).map(ledgerRow).join("") : '<div class="empty"><div class="empty-icon">▣</div><b>No bill names yet</b><p>Create a bill name before your first upload.</p></div>') +
-      '</div></section></div>' +
-      '<section class="card activity"><div class="card-head"><div><h2>Recent uploads</h2><p>Click a row to view all extracted details and the original file.</p></div><button class="btn small" data-act="route" data-view="reports">Excel</button></div><div class="bill-list">' +
-        (recent.length ? recent.map(billRow).join("") : '<div class="empty"><div class="empty-icon">⌁</div><b>No bills saved</b><p>Your reviewed uploads will appear here.</p></div>') +
-      "</div></section>";
-  }
-
-  function summaryCard(label, amount, hint, className) {
-    return '<section class="summary ' + className + '"><div class="label">' + label + '</div><div class="amount">' + amount + '</div><div class="hint">' + hint + "</div></section>";
-  }
-
-  function ledgerRow(ledger) {
-    const stats = ledgerStats(ledger.id);
-    const net = stats.income - stats.expense;
-    return '<button class="ledger-row" data-act="openLedger" data-id="' + ledger.id + '"><div><div class="ledger-name">' + escapeHtml(ledger.name) + '</div><div class="ledger-meta">' + count(stats.count,"upload") + (stats.latest ? " · Last " + dateText(stats.latest.created_at,false) : "") + '</div></div><div class="ledger-total ' + (net < 0 ? "expense" : "income") + '">' + money(net) + "</div></button>";
-  }
-
-  function billRow(bill) {
-    const ledger = ledgerFor(bill.ledger_id);
-    const income = bill.bill_type === "income";
-    return '<button class="bill-row" data-act="openBill" data-id="' + bill.id + '"><span class="bill-badge ' + (income ? "income" : "") + '">' + (income ? "↗" : "↙") + '</span><span><span class="bill-name">' + escapeHtml(ledger ? ledger.name : "Untitled bill") + '</span><span class="bill-meta">' + escapeHtml(bill.vendor || "No vendor") + " · " + dateText(bill.created_at,true) + '</span></span><span class="bill-value ' + (income ? "income" : "expense") + '">' + (income ? "+" : "−") + money(bill.total) + "</span></button>";
-  }
-
-  function chooseView() {
-    return pageHeader("Add a bill", "Choose whether this is a new bill name or another upload for a name you already created.") +
-      '<div class="choice-grid"><button class="choice" data-act="newLedger"><span class="choice-icon">＋</span><h2>New bill</h2><p>Create a new bill name, then capture or upload its first bill.</p><small>CREATE A NEW NAME →</small></button>' +
-      '<button class="choice" data-act="existingLedger" ' + (!state.ledgers.length ? "disabled" : "") + '><span class="choice-icon">▣</span><h2>Existing bill</h2><p>' + (state.ledgers.length ? "Select a previously entered bill name and add another bill." : "Available after you create your first bill name.") + '</p><small>' + (state.ledgers.length ? "SELECT A SAVED NAME →" : "NO SAVED NAMES YET") + "</small></button></div>" + messageHtml();
-  }
-
-  function newLedgerView() {
-    return pageHeader("Create a bill name", "This name groups related uploads. You can select it again whenever you add another bill.") +
-      '<form class="card form-card" style="max-width:610px" data-form="newLedger"><label class="field" style="margin-top:0"><span>Bill name</span><input name="ledgerName" required maxlength="120" autofocus placeholder="Example: Apollo Pharmacy — October 2026"></label><p class="fine">Use a recognizable name. The same account cannot create the same name twice.</p>' + messageHtml() + '<div class="form-actions"><button type="button" class="btn" data-act="route" data-view="choose">Cancel</button><button type="submit" class="btn primary">Continue to upload</button></div></form>';
-  }
-
-  function existingLedgerView() {
-    return pageHeader("Choose an existing bill", "Each selection opens a new upload flow but keeps this bill under the selected name.") +
-      (state.ledgers.length ? '<div class="ledger-grid">' + state.ledgers.map(function (ledger) {
-        const stats = ledgerStats(ledger.id);
-        const net = stats.income - stats.expense;
-        return '<button class="ledger-card" data-act="useLedger" data-id="' + ledger.id + '"><span class="choice-icon">▣</span><h3>' + escapeHtml(ledger.name) + '</h3><p>' + count(stats.count,"saved bill") + (stats.latest ? " · Last upload " + dateText(stats.latest.created_at,false) : "") + '</p><span class="net ' + (net < 0 ? "negative" : "") + '">' + money(net) + "</span></button>";
-      }).join("") + '</div>' : '<div class="empty">There are no saved bill names yet.</div>');
-  }
-
-  function ledgerView() {
-    const ledger = activeLedger();
-    if (!ledger) return existingLedgerView();
-    const bills = state.bills.filter(function (bill) { return bill.ledger_id === ledger.id; });
-    const stats = ledgerStats(ledger.id);
-    return pageHeader(escapeHtml(ledger.name), count(stats.count,"saved bill") + " · Net " + money(stats.income - stats.expense), '<button class="btn primary" data-act="uploadToActive">Add another bill</button>') +
-      '<section class="card activity"><div class="card-head"><div><h2>Uploads in this bill name</h2><p>Each row includes the bill amount, bill date, and exact upload date/time.</p></div><button class="btn small" data-act="existingLedger">All names</button></div><div class="bill-list">' +
-      (bills.length ? bills.map(billRow).join("") : '<div class="empty"><div class="empty-icon">◫</div><b>No uploads under this name</b><p>Use “Add another bill” to capture or upload the first bill.</p></div>') +
-      "</div></section>";
-  }
-
-  function uploadView() {
-    const ledger = activeLedger();
-    if (!ledger) return chooseView();
-    const file = state.file;
-    return pageHeader("Capture or upload a bill", "Selected bill name: " + escapeHtml(ledger.name), button("Change bill name","existingLedger","small")) +
-      '<div class="upload-layout"><section class="drop-zone" id="dropZone"><div><div class="upload-icon">⌁</div><h2>Bring in the bill</h2><p>Take a clear photo, choose one from the gallery, or upload a PDF. We will read it and show every value for your review before saving.</p><div class="upload-buttons"><label class="btn primary" for="cameraInput">Open camera</label><label class="btn" for="galleryInput">Gallery</label><label class="btn" for="fileInput">Upload file</label></div><input id="cameraInput" data-file-source="camera" type="file" accept="image/*" capture="environment"><input id="galleryInput" data-file-source="gallery" type="file" accept="image/*"><input id="fileInput" data-file-source="file" type="file" accept="image/*,application/pdf,.pdf"></div></section>' +
-      '<aside class="card file-card">' + (file ? fileCard(file) : '<div class="empty"><div class="empty-icon">◫</div><b>No file selected</b><p>The original file will be stored privately with this bill after you confirm the extracted details.</p></div>') + "</aside></div>" + messageHtml();
-  }
-
-  function fileCard(file) {
-    const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);
-    return '<div class="file-preview">' + (file.preview ? '<img src="' + escapeAttr(file.preview) + '" alt="Selected bill preview">' : '<span class="pdf-mark">' + (isPdf ? "PDF" : "FILE") + "</span>") + '</div><div class="file-info"><b title="' + escapeAttr(file.name) + '">' + escapeHtml(file.name) + '</b><span>' + fileSize(file.size) + " · " + (isPdf ? "PDF document" : "Image") + '</span>' +
-      '<div class="scan-box"><div class="scan-top"><span id="scanStatus">' + escapeHtml(state.scanStatus || "Ready to scan") + '</span><span id="scanPercent">' + Math.round(state.scanProgress || 0) + '%</span></div><div class="progress"><i id="scanBar" style="width:' + Math.round(state.scanProgress || 0) + '%"></i></div></div>' +
-      '<div class="form-actions"><button class="btn small" data-act="removeFile">Remove</button>' + (state.busy ? '<button class="btn primary small" disabled>Reading…</button>' : '<button class="btn primary small" data-act="scanAgain">Read bill</button>') + "</div></div>";
-  }
-
-  function reviewView() {
-    const ledger = activeLedger();
-    if (!ledger || !state.file) return uploadView();
-    const d = state.parsed;
-    const confidenceText = d.confidence >= 80 ? "Most key fields were found, but check them before saving." : "Some fields are uncertain. Check the original bill and correct every value.";
-    return '<div class="review-wrap">' +
-      '<div class="review-top"><div><div class="eyebrow">Review before saving</div><h1>Confirm the bill details</h1><p class="source">Bill name: <b>' + escapeHtml(ledger.name) + '</b> · Source: ' + escapeHtml(state.file.name) + '</p></div><span class="pill ' + (d.confidence >= 80 ? "green" : "") + '">OCR confidence ' + Math.round(d.confidence) + '%</span></div>' +
-      '<div class="notice ' + (d.confidence >= 80 ? "info" : "warn") + '"><div><b>Do not rely on OCR alone.</b>' + confidenceText + ' The database changes only after you check the confirmation box and save.</div></div>' +
-      (state.duplicateBills.length ? '<div class="notice warn"><div><b>Possible duplicate found.</b>This exact file was already saved ' + state.duplicateBills.length + " time" + (state.duplicateBills.length === 1 ? "" : "s") + ' in this account. It is blocked by default; use the explicit override below only if this is intentional.</div></div>' : "") +
-      '<form id="reviewForm" class="card form-card" data-form="saveBill"><section class="form-section" style="padding-top:0;border-top:0"><div class="section-title"><div><h2>Bill information</h2><p>Correct the header values against the original document.</p></div></div><div class="grid2"><label class="field"><span>Bill type</span><select name="billType"><option value="expense"' + (d.billType === "expense" ? " selected" : "") + '>Expense / purchase</option><option value="income"' + (d.billType === "income" ? " selected" : "") + '>Income / sale</option></select></label><label class="field"><span>Total amount (₹)</span><input id="billTotal" name="total" inputmode="decimal" required value="' + escapeAttr(d.total) + '" placeholder="0.00"></label><label class="field"><span>Vendor / party</span><input name="vendor" maxlength="180" value="' + escapeAttr(d.vendor) + '" placeholder="Vendor name"></label><label class="field"><span>Bill / invoice number</span><input name="billNumber" maxlength="100" value="' + escapeAttr(d.billNumber) + '" placeholder="Invoice number"></label><label class="field"><span>Bill date</span><input name="billDate" type="date" required value="' + escapeAttr(d.billDate) + '"></label><label class="field"><span>Read confidence</span><input disabled value="' + Math.round(d.confidence) + '% — verify manually"></label></div></section>' +
-      '<section class="form-section"><div class="section-title"><div><h2>Line items</h2><p>Edit or remove uncertain rows. The line-item total can help you verify the grand total.</p></div><div><button type="button" class="btn small" data-act="useItemTotal">Use item total</button> <button type="button" class="btn small" data-act="addItem">Add row</button></div></div><div class="item-table-wrap"><table><thead><tr><th>Description</th><th>Qty</th><th>Rate</th><th>Amount</th><th></th></tr></thead><tbody>' + itemRows(d.items) + '</tbody></table></div></section>' +
-      '<section class="form-section"><div class="section-title"><div><h2>Final check</h2><p>Original and extracted text are available for comparison below.</p></div><button type="button" class="btn link" data-act="toggleRaw">Show OCR text</button></div><div id="rawText" hidden><label class="field"><span>OCR text (read-only)</span><textarea readonly>' + escapeHtml(state.rawText) + "</textarea></label></div>" +
-      (state.duplicateBills.length ? '<label class="checkline"><input name="forceDuplicate" type="checkbox"><span><b>Force upload this duplicate</b><br>Save it anyway and keep a visible duplicate-override audit flag.</span></label>' : "") +
-      '<label class="checkline"><input name="reviewed" type="checkbox" required><span><b>I reviewed the original bill.</b><br>I confirm that the bill type, amount, date, vendor, and line items above are correct.</span></label>' +
-      '<div class="form-actions"><button type="button" class="btn" data-act="backToUpload">Back to file</button><button type="submit" class="btn primary">' + (state.busy ? "Saving…" : "Save reviewed bill") + "</button></div></section></form></div>" + messageHtml();
-  }
-
-  function itemRows(items) {
-    if (!items.length) return '<tr><td colspan="5" class="muted">No reliable line items were read. Add important rows manually if needed.</td></tr>';
-    return items.map(function (item, index) {
-      return '<tr data-item-row="' + index + '"><td><input class="item-description" name="itemDescription" value="' + escapeAttr(item.description || "") + '" placeholder="Description"></td><td><input name="itemQuantity" inputmode="decimal" value="' + escapeAttr(item.quantity || "") + '" placeholder="—"></td><td><input name="itemRate" inputmode="decimal" value="' + escapeAttr(item.rate || "") + '" placeholder="—"></td><td><input name="itemAmount" inputmode="decimal" value="' + escapeAttr(item.amount || "") + '" placeholder="0.00"></td><td><button class="icon-button" type="button" data-act="removeItem" data-index="' + index + '" aria-label="Remove line">×</button></td></tr>';
-    }).join("");
-  }
-
-  function detailView() {
-    const bill = billFor(state.detailId);
-    if (!bill) return dashboardView();
-    const ledger = ledgerFor(bill.ledger_id);
-    const income = bill.bill_type === "income";
-    const items = Array.isArray(bill.items) ? bill.items : [];
-    return '<div class="page-head"><div><button class="btn link" data-act="dashboard">← Dashboard</button><h1 style="margin-top:10px">' + escapeHtml(ledger ? ledger.name : "Bill details") + '</h1><p>Saved ' + dateText(bill.created_at,true) + (bill.force_uploaded ? " · Duplicate override was used" : "") + '</p></div></div>' +
-      '<div class="detail-layout"><section class="card detail-hero"><div class="detail-kicker">' + (income ? "Income / sale" : "Expense / purchase") + '</div><div class="detail-amount ' + (income ? "income" : "expense") + '">' + (income ? "+" : "−") + money(bill.total) + '</div><dl class="details"><div><dt>Vendor / party</dt><dd>' + escapeHtml(bill.vendor || "—") + '</dd></div><div><dt>Bill number</dt><dd>' + escapeHtml(bill.bill_number || "—") + '</dd></div><div><dt>Bill date</dt><dd>' + dateText(bill.bill_date,false) + '</dd></div><div><dt>Uploaded</dt><dd>' + dateText(bill.created_at,true) + '</dd></div><div><dt>OCR confidence</dt><dd>' + escapeHtml(String(bill.extraction_confidence == null ? "—" : bill.extraction_confidence + "%")) + '</dd></div><div><dt>Original file</dt><dd>' + escapeHtml(bill.original_file_name || "No file") + "</dd></div></dl>" +
-      '<section class="form-section"><div class="section-title"><div><h2>Saved line items</h2><p>' + count(items.length,"line item") + " confirmed with this upload.</p></div></div>" + (items.length ? '<div class="item-table-wrap"><table><thead><tr><th>Description</th><th>Qty</th><th>Rate</th><th>Amount</th></tr></thead><tbody>' + items.map(function (item) { return "<tr><td>" + escapeHtml(item.description || "—") + "</td><td>" + escapeHtml(item.quantity || "—") + "</td><td>" + escapeHtml(item.rate || "—") + "</td><td>" + money(item.amount || 0) + "</td></tr>"; }).join("") + "</tbody></table></div>" : '<p class="muted" style="margin-top:14px">No line items were saved for this bill.</p>') + "</section></section>" +
-      '<aside class="card detail-side"><h3>Original document</h3><p class="muted">Files are private to this signed-in account.</p>' + (bill.storage_path ? '<button class="btn primary wide" style="margin-top:0" data-act="openOriginal" data-id="' + bill.id + '">Open original</button>' : '<p class="fine">No original was attached.</p>') + (bill.force_uploaded ? '<span class="pill">Duplicate override</span>' : '<span class="pill green">Unique source file</span>') + '<button class="btn danger wide" style="margin-top:0" data-act="deleteBill" data-id="' + bill.id + '">Delete this bill</button></aside></div>';
-  }
-
-  function reportsView() {
-    const sum = totals();
-    const rows = state.ledgers.map(function (ledger) {
-      const stats = ledgerStats(ledger.id);
-      return '<div class="report-stat"><span><b>' + escapeHtml(ledger.name) + '</b><br><small class="muted">' + count(stats.count,"upload") + "</small></span><span><b>" + money(stats.income - stats.expense) + "</b></span></div>";
-    }).join("");
-    return pageHeader("Reports & Excel", "Download a current workbook of the database records. A cloud Excel workbook needs its own Microsoft/Graph connection.", button("Download Excel","downloadExcel","primary")) +
-      '<div class="report-grid"><section class="card"><div class="card-head"><div><h2>Bill groups</h2><p>Net total for every bill name in this account</p></div></div><div class="report-stats">' + (rows || '<div class="empty">No data to report yet.</div>') + '</div></section><aside class="card card-pad"><h2>What export includes</h2><p class="sub">One worksheet for bills and one for confirmed line items. The file reflects the dashboard at the moment you download it.</p><div class="notice info"><div><b>Automatic cloud Excel sync</b>To update a specific online Excel file automatically, provide its OneDrive/SharePoint location and authorize Microsoft Graph. This app currently produces a current downloadable .xlsx file.</div></div><div class="report-stats"><div class="report-stat"><span>Income</span><b style="color:var(--green)">' + money(sum.income) + '</b></div><div class="report-stat"><span>Expenses</span><b style="color:var(--red)">' + money(sum.expense) + '</b></div><div class="report-stat"><span>Net balance</span><b>' + money(sum.income-sum.expense) + "</b></div></div></aside></div>";
-  }
-
-  async function init() {
-    if (!configured || !db) {
-      state.view = "setup";
-      render();
-      return;
-    }
-    render();
-    try {
-      const response = await db.auth.getSession();
-      state.user = response.data.session ? response.data.session.user : null;
-      if (state.user) {
-        await refreshData();
-        state.view = "dashboard";
-      } else state.view = "auth";
-    } catch (error) {
-      state.view = "auth";
-      setMessage("error","Could not connect to Supabase.", error.message || "Check APP_CONFIG and your internet connection.");
-    }
-    render();
-    db.auth.onAuthStateChange(function (event, session) {
-      setTimeout(async function () {
-        state.user = session ? session.user : null;
-        if (state.user) {
-          try {
-            await refreshData();
-            state.view = "dashboard";
-          } catch (error) {
-            setMessage("error","Could not load this account’s bills.", error.message || "Check Supabase policies.");
-          }
-        } else {
-          resetPrivateState();
-          state.view = "auth";
-        }
-        render();
-      },0);
-    });
-  }
-
-  function resetPrivateState() {
-    state.ledgers = [];
-    state.bills = [];
-    state.activeLedger = null;
-    removeSelectedFile();
-    state.detailId = null;
-    state.message = "";
-  }
-
-  async function refreshData() {
-    if (!db || !state.user) return;
-    const result = await Promise.all([
-      db.from("bill_ledgers").select("id,name,created_at").order("created_at",{ascending:true}),
-      db.from("bills").select("id,ledger_id,bill_type,vendor,bill_number,bill_date,total,items,source_hash,original_file_name,storage_path,file_size,ocr_text,extraction_confidence,force_uploaded,created_at").order("created_at",{ascending:false})
-    ]);
-    if (result[0].error) throw result[0].error;
-    if (result[1].error) throw result[1].error;
-    state.ledgers = result[0].data || [];
-    state.bills = result[1].data || [];
-  }
-
-  async function handleAuth(form) {
-    if (!db) return;
-    const values = new FormData(form);
-    const email = String(values.get("email") || "").trim();
-    const password = String(values.get("password") || "");
-    const signup = state.authMode === "signup";
-    state.message = "";
-    if (signup && password !== String(values.get("confirmPassword") || "")) {
-      setMessage("error","Passwords do not match.","Enter the same password twice.");
-      render();
-      return;
-    }
-    state.busy = true;
-    render();
-    try {
-      if (signup) {
-        const result = await db.auth.signUp({
-          email:email, password:password,
-          options:{ data:{ full_name:String(values.get("name") || "").trim() } }
-        });
-        if (result.error) throw result.error;
-        if (!result.data.session) {
-          setMessage("success","Check your email.","Supabase sent a confirmation link. After confirming, sign in here.");
-          state.authMode = "signin";
-        }
-      } else {
-        const result = await db.auth.signInWithPassword({ email:email, password:password });
-        if (result.error) throw result.error;
-      }
-    } catch (error) {
-      setMessage("error",signup ? "Account could not be created." : "Sign-in failed.", error.message || "Please try again.");
-    } finally {
-      state.busy = false;
-      render();
-    }
-  }
-
-  async function createLedger(form) {
-    const name = String(new FormData(form).get("ledgerName") || "").trim();
-    if (!name) return;
-    state.busy = true;
-    state.message = "";
-    render();
-    try {
-      const result = await db.from("bill_ledgers").insert({ user_id:state.user.id, name:name }).select("id,name,created_at").single();
-      if (result.error) throw result.error;
-      state.ledgers.push(result.data);
-      state.activeLedger = result.data.id;
-      state.view = "upload";
-    } catch (error) {
-      setMessage("error","Could not create that bill name.", error.message && /duplicate/i.test(error.message) ? "Use a different name or choose the existing bill." : error.message || "Please try again.");
-    } finally {
-      state.busy = false;
-      render();
-    }
-  }
-
-  async function hashFile(file) {
-    const bytes = await file.arrayBuffer();
-    const hash = await crypto.subtle.digest("SHA-256",bytes);
-    return Array.from(new Uint8Array(hash)).map(function (byte) { return byte.toString(16).padStart(2,"0"); }).join("");
-  }
-
-  async function selectFile(file) {
-    if (!file) return;
-    const allowed = /^image\//.test(file.type) || file.type === "application/pdf" || /\.pdf$/i.test(file.name);
-    if (!allowed) {
-      setMessage("error","Choose a bill image or PDF.","Supported files are JPG, PNG, WEBP, HEIC where the browser supports it, and PDF.");
-      render();
-      return;
-    }
-    if (file.size > 25 * 1024 * 1024) {
-      setMessage("error","That file is too large.","Choose a file smaller than 25 MB.");
-      render();
-      return;
-    }
-    removeSelectedFile();
-    state.file = { source:file, name:file.name, type:file.type, size:file.size, preview:/^image\//.test(file.type) ? URL.createObjectURL(file) : "", hash:"" };
-    state.rawText = "";
-    state.parsed = freshDraft();
-    state.duplicateBills = [];
-    state.forceDuplicate = false;
-    state.message = "";
-    state.scanStatus = "Checking file…";
-    state.scanProgress = 3;
-    render();
-    try {
-      state.file.hash = await hashFile(file);
-      await checkDuplicate(state.file.hash);
-      await scanSelectedFile();
-    } catch (error) {
-      setMessage("error","This file could not be prepared.", error.message || "Try a clearer, smaller image or PDF.");
-      state.scanStatus = "Could not read file";
-      state.scanProgress = 0;
-      render();
-    }
-  }
-
-  async function checkDuplicate(hash) {
-    const result = await db.from("bills").select("id,bill_number,created_at,ledger_id").eq("source_hash",hash).limit(10);
-    if (result.error) throw result.error;
-    state.duplicateBills = result.data || [];
-  }
-
-  function setScanProgress(status, progress) {
-    state.scanStatus = status;
-    state.scanProgress = Math.max(0,Math.min(100,progress || 0));
-    const statusNode = $("#scanStatus");
-    const percentNode = $("#scanPercent");
-    const bar = $("#scanBar");
-    if (statusNode) statusNode.textContent = status;
-    if (percentNode) percentNode.textContent = Math.round(state.scanProgress) + "%";
-    if (bar) bar.style.width = Math.round(state.scanProgress) + "%";
-  }
-
-  async function scanSelectedFile() {
-    if (!state.file || state.busy) return;
-    state.busy = true;
-    state.message = "";
-    setScanProgress("Preparing OCR…",7);
-    render();
-    try {
-      const file = state.file.source;
-      let text = "";
-      if (/^image\//.test(file.type)) {
-        text = await ocrImage(file,7,92);
-      } else {
-        text = await ocrPdf(file);
-      }
-      if (!text.trim()) throw new Error("No readable text was found. Try a brighter, sharper photo or enter the details manually.");
-      state.rawText = text;
-      state.parsed = parseBillText(text);
-      state.view = "review";
-      setScanProgress("Ready for review",100);
-    } catch (error) {
-      state.view = "upload";
-      setMessage("error","The bill could not be read automatically.", error.message || "You can choose another photo or PDF.");
-      setScanProgress("OCR needs another file",0);
-    } finally {
-      state.busy = false;
-      render();
-    }
-  }
-
-  async function ocrImage(image, start, end) {
-    if (!window.Tesseract) throw new Error("OCR library did not load. Check your internet connection and reload.");
-    const result = await window.Tesseract.recognize(image,"eng",{
-      logger:function (message) {
-        const fraction = typeof message.progress === "number" ? message.progress : 0;
-        const label = message.status ? String(message.status).replace(/_/g," ") : "Reading image";
-        setScanProgress(label,start + (end - start) * fraction);
-      }
-    });
-    return result && result.data ? result.data.text : "";
-  }
-
-  async function ocrPdf(file) {
-    if (!window.pdfjsLib) throw new Error("PDF reader did not load. Check your internet connection and reload.");
-    setScanProgress("Opening PDF…",10);
-    const documentData = await file.arrayBuffer();
-    const pdf = await window.pdfjsLib.getDocument({ data:documentData }).promise;
-    const pageCount = Math.min(pdf.numPages,3);
-    let combined = "";
-    for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
-      setScanProgress("Reading PDF page " + pageNumber + " of " + pageCount,12 + ((pageNumber - 1) / pageCount) * 78);
-      const page = await pdf.getPage(pageNumber);
-      const viewport = page.getViewport({ scale:2 });
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.ceil(viewport.width);
-      canvas.height = Math.ceil(viewport.height);
-      await page.render({ canvasContext:canvas.getContext("2d"), viewport:viewport }).promise;
-      const blob = await new Promise(function (resolve) { canvas.toBlob(resolve,"image/png"); });
-      if (blob) combined += "\n" + await ocrImage(blob,14 + ((pageNumber - 1) / pageCount) * 76,14 + (pageNumber / pageCount) * 76);
-    }
-    return combined;
-  }
-
-  function parseMoney(value) {
-    const cleaned = String(value == null ? "" : value).replace(/[₹,\s]/g,"").replace(/(?:INR|RS\.?)/ig,"").replace(/[^\d.-]/g,"");
-    const number = Number(cleaned);
-    return Number.isFinite(number) && number >= 0 ? number : null;
-  }
-
-  function normalizeDate(raw) {
-    const value = String(raw || "").trim().replace(/[.]/g,"/");
-    let match = value.match(/\b(20\d{2})[-/](\d{1,2})[-/](\d{1,2})\b/);
-    if (match) return match[1] + "-" + String(match[2]).padStart(2,"0") + "-" + String(match[3]).padStart(2,"0");
-    match = value.match(/\b(\d{1,2})[-/](\d{1,2})[-/](20\d{2}|\d{2})\b/);
-    if (match) {
-      let day = Number(match[1]), month = Number(match[2]), year = Number(match[3]);
-      if (year < 100) year += 2000;
-      if (day <= 12 && month > 12) { const swap = day; day = month; month = swap; }
-      if (month >= 1 && month <= 12 && day >= 1 && day <= 31) return String(year) + "-" + String(month).padStart(2,"0") + "-" + String(day).padStart(2,"0");
-    }
-    const named = value.match(/\b(\d{1,2})\s+(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)[,]?\s+(20\d{2})\b/i);
-    if (named) {
-      const months = {jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
-      const month = months[named[2].slice(0,3).toLowerCase()];
-      return named[3] + "-" + String(month).padStart(2,"0") + "-" + String(named[1]).padStart(2,"0");
-    }
-    return "";
-  }
-
-  function parseBillText(text) {
-    const lines = String(text || "").replace(/\r/g,"").split("\n").map(function (line) { return line.replace(/\s+/g," ").trim(); }).filter(Boolean);
-    const upper = lines.join("\n").toUpperCase();
-    const draft = freshDraft();
-    const totalLabels = /(grand\s*total|net\s*(amount|payable)|amount\s*payable|invoice\s*total|total\s*amount|bill\s*amount|balance\s*due|total)/i;
-    const invoiceLabels = /(invoice|bill|receipt|tax\s*invoice)\s*(no|number|#|:)?\s*([A-Z0-9][A-Z0-9\-\/]{2,})/i;
-    const dateLabels = /(invoice|bill|receipt|date|dated)\D{0,15}(\d{1,2}[\/.-]\d{1,2}[\/.-](?:20)?\d{2}|\d{4}[\/.-]\d{1,2}[\/.-]\d{1,2}|\d{1,2}\s+[A-Za-z]{3,9}\s+20\d{2})/i;
-    const bannedVendor = /(tax invoice|cash memo|invoice|bill|gstin|phone|mobile|address|date|serial)/i;
-    let score = 0;
-    for (let i = 0; i < lines.length; i += 1) {
-      const line = lines[i];
-      if (!draft.vendor && /[A-Za-z]{3}/.test(line) && !bannedVendor.test(line) && line.length < 90) {
-        draft.vendor = line.replace(/^[^A-Za-z]+/,"").trim();
-      }
-      const invoice = line.match(invoiceLabels);
-      if (!draft.billNumber && invoice) draft.billNumber = invoice[3];
-      const date = line.match(dateLabels);
-      if (!draft.billDate && date) draft.billDate = normalizeDate(date[2]);
-    }
-    if (!draft.billDate) {
-      for (let d = 0; d < lines.length; d += 1) {
-        const found = normalizeDate(lines[d]);
-        if (found) { draft.billDate = found; break; }
-      }
-    }
-    const candidates = [];
-    for (let i = 0; i < lines.length; i += 1) {
-      const line = lines[i];
-      if (totalLabels.test(line)) {
-        const amounts = line.match(/(?:₹|INR|RS\.?\s*)?\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?/ig) || [];
-        amounts.forEach(function (amount) {
-          const parsed = parseMoney(amount);
-          if (parsed != null && parsed > 0) candidates.push({ value:parsed, weight:totalLabels.test(line) ? 3 : 1, index:i });
-        });
-      }
-    }
-    if (candidates.length) {
-      candidates.sort(function (a,b) { return b.weight - a.weight || b.index - a.index || b.value - a.value; });
-      draft.total = String(candidates[0].value);
-    }
-    const saleWords = /(sale|sales|customer|received from|cash sale)/i;
-    const expenseWords = /(purchase|supplier|vendor|paid to|medicine purchase)/i;
-    if (saleWords.test(upper) && !expenseWords.test(upper)) draft.billType = "income";
-    const skipLine = /(grand total|net total|sub total|cgst|sgst|igst|tax|discount|round off|amount payable|invoice no|bill no|date)/i;
-    for (let i = 0; i < lines.length && draft.items.length < 35; i += 1) {
-      const line = lines[i];
-      if (skipLine.test(line) || !/[A-Za-z]{2}/.test(line)) continue;
-      const numbers = line.match(/(?<![A-Za-z])\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?(?![A-Za-z])/g) || [];
-      if (numbers.length < 2) continue;
-      const values = numbers.map(parseMoney).filter(function (n) { return n != null; });
-      if (values.length < 2) continue;
-      const description = line.replace(/(?:₹|INR|RS\.?\s*)?\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?/ig,"").replace(/\s+/g," ").replace(/[-|]+/g," ").trim();
-      if (description.length < 2) continue;
-      const amount = values[values.length - 1];
-      const quantity = values.length >= 3 ? values[0] : "";
-      const rate = values.length >= 3 ? values[values.length - 2] : "";
-      if (amount > 0) draft.items.push({ description:description.slice(0,180), quantity:quantity, rate:rate, amount:amount });
-    }
-    if (draft.vendor) score += 24;
-    if (draft.billNumber) score += 16;
-    if (draft.billDate) score += 18;
-    if (draft.total) score += 30;
-    if (draft.items.length) score += Math.min(12,draft.items.length * 3);
-    draft.confidence = Math.min(95,score);
-    return draft;
-  }
-
-  function syncDraftFromReview() {
-    const form = $("#reviewForm");
-    if (!form) return;
-    const values = new FormData(form);
-    const descriptions = values.getAll("itemDescription");
-    const quantities = values.getAll("itemQuantity");
-    const rates = values.getAll("itemRate");
-    const amounts = values.getAll("itemAmount");
-    state.parsed = {
-      billType:String(values.get("billType") || "expense"),
-      vendor:String(values.get("vendor") || ""),
-      billNumber:String(values.get("billNumber") || ""),
-      billDate:String(values.get("billDate") || ""),
-      total:String(values.get("total") || ""),
-      confidence:state.parsed.confidence || 0,
-      items:descriptions.map(function (description,index) {
-        return { description:String(description || ""), quantity:String(quantities[index] || ""), rate:String(rates[index] || ""), amount:String(amounts[index] || "") };
-      }).filter(function (item) { return item.description.trim() || item.amount; })
-    };
-  }
-
-  async function saveBill(form) {
-    const values = new FormData(form);
-    syncDraftFromReview();
-    const d = state.parsed;
-    const total = parseMoney(d.total);
-    if (total == null || total <= 0) {
-      setMessage("error","Enter a valid total amount.","The bill cannot be saved without a positive total.");
-      render();
-      return;
-    }
-    if (!d.billDate) {
-      setMessage("error","Enter the bill date.","Check it against the original document.");
-      render();
-      return;
-    }
-    const force = values.get("forceDuplicate") === "on";
-    if (state.duplicateBills.length && !force) {
-      setMessage("warn","Duplicate blocked.","Tick the explicit force-upload choice only when this duplicate is intentional.");
-      render();
-      return;
-    }
-    state.busy = true;
-    render();
-    let storagePath = "";
-    try {
-      const safeName = state.file.name.replace(/[^a-zA-Z0-9._-]+/g,"-");
-      storagePath = state.user.id + "/" + state.activeLedger + "/" + Date.now() + "-" + safeName;
-      const upload = await db.storage.from(APP_CONFIG.storageBucket).upload(storagePath,state.file.source,{
-        cacheControl:"3600", upsert:false, contentType:state.file.type || undefined
-      });
-      if (upload.error) throw upload.error;
-      const itemRows = d.items.map(function (item) {
-        return {
-          description:item.description.trim(),
-          quantity:parseMoney(item.quantity),
-          rate:parseMoney(item.rate),
-          amount:parseMoney(item.amount)
-        };
-      }).filter(function (item) { return item.description || item.amount != null; });
-      const result = await db.rpc("save_bill_with_duplicate_guard",{
-        p_ledger_id:state.activeLedger,
-        p_bill_type:d.billType,
-        p_vendor:d.vendor.trim() || null,
-        p_bill_number:d.billNumber.trim() || null,
-        p_bill_date:d.billDate,
-        p_total:total,
-        p_items:itemRows,
-        p_source_hash:state.file.hash,
-        p_original_file_name:state.file.name,
-        p_storage_path:storagePath,
-        p_file_size:state.file.size,
-        p_ocr_text:state.rawText.slice(0,50000),
-        p_extraction_confidence:Math.round(d.confidence || 0),
-        p_force_duplicate:force
-      });
-      if (result.error) throw result.error;
-      await refreshData();
-      removeSelectedFile();
-      state.parsed = freshDraft();
-      state.rawText = "";
-      state.duplicateBills = [];
-      state.activeLedger = null;
-      state.detailId = result.data && result.data.id || null;
-      state.view = "dashboard";
-      toast(force ? "Duplicate saved with an override flag." : "Reviewed bill saved and dashboard updated.");
-    } catch (error) {
-      if (storagePath) await db.storage.from(APP_CONFIG.storageBucket).remove([storagePath]);
-      const duplicate = error && (error.code === "23505" || /duplicate/i.test(error.message || ""));
-      setMessage(duplicate ? "warn" : "error", duplicate ? "Duplicate blocked by the database." : "Bill was not saved.", duplicate ? "Someone may have saved the same file just now. Use the explicit override only if intentional." : error.message || "Check your Supabase setup and try again.");
-    } finally {
-      state.busy = false;
-      render();
-    }
-  }
-
-  async function openOriginal(id) {
-    const bill = billFor(id);
-    if (!bill || !bill.storage_path) return;
-    const result = await db.storage.from(APP_CONFIG.storageBucket).createSignedUrl(bill.storage_path,60);
-    if (result.error) {
-      toast("Could not open the original: " + result.error.message);
-      return;
-    }
-    window.open(result.data.signedUrl,"_blank","noopener");
-  }
-
-  async function deleteBill(id) {
-    const bill = billFor(id);
-    if (!bill) return;
-    if (!window.confirm("Delete this bill? This removes it from the dashboard and cannot be undone.")) return;
-    try {
-      const result = await db.from("bills").delete().eq("id",id);
-      if (result.error) throw result.error;
-      if (bill.storage_path) {
-        const removed = await db.storage.from(APP_CONFIG.storageBucket).remove([bill.storage_path]);
-        if (removed.error) console.warn("The bill row was deleted but its file could not be removed.",removed.error);
-      }
-      await refreshData();
-      state.view = "dashboard";
-      state.detailId = null;
-      toast("Bill deleted and dashboard updated.");
-    } catch (error) {
-      setMessage("error","Could not delete the bill.",error.message || "Please try again.");
-      render();
-    }
-  }
-
-  function removeSelectedFile() {
-    if (state.file && state.file.preview) URL.revokeObjectURL(state.file.preview);
-    state.file = null;
-    state.scanStatus = "";
-    state.scanProgress = 0;
-  }
-
-  function downloadExcel() {
-    if (!window.XLSX) {
-      toast("Excel library did not load. Check your internet connection.");
-      return;
-    }
-    const billRows = state.bills.map(function (bill) {
-      const ledger = ledgerFor(bill.ledger_id);
-      return {
-        "Bill name":ledger ? ledger.name : "",
-        "Type":bill.bill_type === "income" ? "Income / sale" : "Expense / purchase",
-        "Vendor / party":bill.vendor || "",
-        "Bill number":bill.bill_number || "",
-        "Bill date":bill.bill_date || "",
-        "Total (INR)":Number(bill.total || 0),
-        "Uploaded at":bill.created_at || "",
-        "Original file":bill.original_file_name || "",
-        "OCR confidence":bill.extraction_confidence == null ? "" : bill.extraction_confidence + "%",
-        "Duplicate override":bill.force_uploaded ? "Yes" : "No"
-      };
-    });
-    const itemRows = [];
-    state.bills.forEach(function (bill) {
-      const ledger = ledgerFor(bill.ledger_id);
-      (Array.isArray(bill.items) ? bill.items : []).forEach(function (item) {
-        itemRows.push({
-          "Bill name":ledger ? ledger.name : "",
-          "Bill number":bill.bill_number || "",
-          "Bill date":bill.bill_date || "",
-          "Description":item.description || "",
-          "Quantity":item.quantity == null ? "" : item.quantity,
-          "Rate (INR)":item.rate == null ? "" : item.rate,
-          "Amount (INR)":item.amount == null ? "" : item.amount
-        });
-      });
-    });
-    const book = window.XLSX.utils.book_new();
-    const billsSheet = window.XLSX.utils.json_to_sheet(billRows);
-    const itemsSheet = window.XLSX.utils.json_to_sheet(itemRows);
-    billsSheet["!cols"] = [{wch:30},{wch:20},{wch:28},{wch:20},{wch:14},{wch:15},{wch:22},{wch:28},{wch:16},{wch:19}];
-    itemsSheet["!cols"] = [{wch:30},{wch:20},{wch:14},{wch:36},{wch:12},{wch:15},{wch:15}];
-    window.XLSX.utils.book_append_sheet(book,billsSheet,"Bills");
-    window.XLSX.utils.book_append_sheet(book,itemsSheet,"Line items");
-    window.XLSX.writeFile(book,"RxPx-bills-" + new Date().toISOString().slice(0,10) + ".xlsx");
-    toast("Current Excel report downloaded.");
-  }
-
-  function drawCharts() {
-    state.charts.forEach(function (chart) { chart.destroy(); });
-    state.charts = [];
-    const moneyNode = $("#moneyChart");
-    if (!moneyNode || !window.Chart) return;
-    const sum = totals();
-    state.charts.push(new window.Chart(moneyNode,{
-      type:"bar",
-      data:{ labels:["Income","Expenses","Net balance"], datasets:[{ data:[sum.income,sum.expense,sum.income-sum.expense], backgroundColor:["#15754b","#b42318","#ff7a00"], borderRadius:9, borderSkipped:false }] },
-      options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label:function (context) { return money(context.raw); } } } }, scales:{ y:{ beginAtZero:true, ticks:{ callback:function (value) { return "₹" + Number(value).toLocaleString("en-IN"); } }, grid:{color:"#f0eeeb"} }, x:{grid:{display:false}} } }
-    }));
-  }
-
-  document.addEventListener("click",function (event) {
-    const target = event.target.closest("[data-act]");
-    if (!target || target.disabled) return;
-    const action = target.dataset.act;
-    if (action === "signinTab") { state.authMode = "signin"; state.message = ""; render(); }
-    else if (action === "signupTab") { state.authMode = "signup"; state.message = ""; render(); }
-    else if (action === "logout") { db.auth.signOut(); }
-    else if (action === "home" || action === "dashboard") { state.view = "dashboard"; state.message = ""; render(); }
-    else if (action === "route") { state.view = target.dataset.view; state.message = ""; render(); }
-    else if (action === "newLedger") { state.view = "new-ledger"; state.message = ""; render(); }
-    else if (action === "existingLedger") { if (state.ledgers.length) { state.view = "existing-ledger"; state.message = ""; render(); } }
-    else if (action === "useLedger") { state.activeLedger = target.dataset.id; state.view = "upload"; state.message = ""; render(); }
-    else if (action === "openLedger") { state.activeLedger = target.dataset.id; state.view = "ledger"; render(); }
-    else if (action === "uploadToActive") { if (state.activeLedger) { state.view = "upload"; state.message = ""; render(); } }
-    else if (action === "openBill") { state.detailId = target.dataset.id; state.view = "detail"; render(); }
-    else if (action === "removeFile") { removeSelectedFile(); state.message = ""; render(); }
-    else if (action === "scanAgain") { scanSelectedFile(); }
-    else if (action === "backToUpload") { state.view = "upload"; render(); }
-    else if (action === "addItem") { syncDraftFromReview(); state.parsed.items.push({description:"",quantity:"",rate:"",amount:""}); render(); }
-    else if (action === "removeItem") { syncDraftFromReview(); state.parsed.items.splice(Number(target.dataset.index),1); render(); }
-    else if (action === "useItemTotal") {
-      syncDraftFromReview();
-      const total = state.parsed.items.reduce(function (sum,item) { return sum + (parseMoney(item.amount) || 0); },0);
-      state.parsed.total = total ? String(total) : state.parsed.total;
-      render();
-    }
-    else if (action === "toggleRaw") { const raw = $("#rawText"); if (raw) raw.hidden = !raw.hidden; }
-    else if (action === "openOriginal") { openOriginal(target.dataset.id); }
-    else if (action === "deleteBill") { deleteBill(target.dataset.id); }
-    else if (action === "downloadExcel") { downloadExcel(); }
-  });
-
-  document.addEventListener("submit",function (event) {
-    const form = event.target;
-    if (!form.dataset.form) return;
-    event.preventDefault();
-    if (form.dataset.form === "auth") handleAuth(form);
-    else if (form.dataset.form === "newLedger") createLedger(form);
-    else if (form.dataset.form === "saveBill") saveBill(form);
-  });
-
-  document.addEventListener("change",function (event) {
-    const input = event.target;
-    if (input.type === "file" && input.files && input.files[0]) selectFile(input.files[0]);
-  });
-
-  document.addEventListener("dragover",function (event) {
-    if (event.target.closest("#dropZone")) { event.preventDefault(); $("#dropZone").classList.add("drag"); }
-  });
-  document.addEventListener("dragleave",function (event) {
-    if (event.target.closest("#dropZone")) $("#dropZone").classList.remove("drag");
-  });
-  document.addEventListener("drop",function (event) {
-    const zone = event.target.closest("#dropZone");
-    if (!zone) return;
-    event.preventDefault();
-    zone.classList.remove("drag");
-    if (event.dataTransfer.files && event.dataTransfer.files[0]) selectFile(event.dataTransfer.files[0]);
-  });
-
-  init();
-  </script>
-</body>
-</html>

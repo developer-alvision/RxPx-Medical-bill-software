@@ -1,0 +1,223 @@
+/* Browser checks for the page the app runs ('medical bills.html'): accounts, saved data,
+ * reading photo / PDF / Excel bills, stock in and out, expired batches, duplicates, edits,
+ * deletes, reports, export and two open tabs.
+ * Run: node tests/page-app.test.cjs
+ * Needs Playwright with Chromium (or PLAYWRIGHT_PACKAGE) and internet access for the page's
+ * CDN libraries. Offline: set RXPX_CDN_DIR to a node_modules folder holding lucide@0.469.0,
+ * chart.js@4.5.0, tesseract.js@5.1.1, tesseract.js-core@5, @tesseract.js-data/eng,
+ * pdfjs-dist@3.11.174 and SheetJS 0.20.3 (as xlsx).
+ * Bills are rendered in memory; no images, PDFs or workbooks are written to disk.
+ */
+'use strict';
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const http = require('node:http');
+const path = require('node:path');
+let playwright;
+for (const candidate of [process.env.PLAYWRIGHT_PACKAGE, 'playwright', 'playwright-core'].filter(Boolean)) {
+  try { playwright = require(candidate); break; } catch (_) {}
+}
+if (!playwright) throw new Error('Install Playwright or set PLAYWRIGHT_PACKAGE to its installed package directory.');
+let XLSX = null;
+try { XLSX = require('xlsx'); } catch (_) {}
+
+const root = path.resolve(__dirname, '..');
+const CDN_DIR = process.env.RXPX_CDN_DIR;
+const CDN = [
+  [/^https:\/\/cdn\.jsdelivr\.net\/npm\/(lucide@[^/]+|chart\.js@[^/]+|tesseract\.js@[^/]+|tesseract\.js-core@[^/]+|@tesseract\.js-data\/eng)\/(.*)$/, (m) => path.join(m[1].replace(/@v?[\d.]+$/, ''), m[2])],
+  [/^https:\/\/cdnjs\.cloudflare\.com\/ajax\/libs\/pdf\.js\/[^/]+\/(.*)$/, (m) => path.join('pdfjs-dist', 'build', m[1])],
+  [/^https:\/\/cdn\.sheetjs\.com\/xlsx-[^/]+\/package\/(.*)$/, (m) => path.join('xlsx', m[1])],
+];
+
+const css = 'body{margin:0;background:#fff;color:#111;font:20px Arial,sans-serif}.w{width:1100px;padding:36px}table{border-collapse:collapse;width:100%}td,th{border:1px solid #333;padding:6px 8px}th{text-align:left}.r{text-align:right}';
+const bill = body => `<html><head><style>${css}</style></head><body><div class="w">${body}</div></body></html>`;
+const table = (head, rows, rightFrom) => `<table><tr>${head.map((h, i) => `<th class="${i >= rightFrom ? 'r' : ''}">${h}</th>`).join('')}</tr>${rows.map(r => `<tr>${r.map((c, i) => `<td class="${i >= rightFrom ? 'r' : ''}">${c}</td>`).join('')}</tr>`).join('')}</table>`;
+const BILLS = {
+  purchase: bill(`<h2 style="text-align:center">LAKSHMI MEDICAL AGENCIES</h2><div style="text-align:center">Pharma Distributors · GSTIN 37AAKFL5521M1ZQ</div><b>GST INVOICE</b>
+<div>Bill To: RxPx Hospitals &nbsp;&nbsp; Invoice No: LMA-4471 &nbsp;&nbsp; Invoice Date: 14-10-2026</div>
+${table(['S.No', 'Product Name', 'Pack', 'Batch', 'Exp', 'Qty', 'Free', 'MRP', 'Rate', 'GST%', 'Amount'], [
+    ['1', 'DOLO 650 TAB', '15\'S', 'DL6243', '08/28', '20', '2', '33.60', '24.10', '12', '482.00'],
+    ['2', 'PAN 40 TAB', '15\'S', 'P40X921', '11/27', '15', '1', '155.00', '110.40', '12', '1656.00'],
+    ['3', 'MONTEK LC TAB', '10\'S', 'MLC5502', '07/27', '10', '0', '210.00', '150.00', '12', '1500.00'],
+  ], 5)}<div class="r">Taxable Value: 3638.00</div><div class="r">CGST 6%: 218.28 &nbsp; SGST 6%: 218.28</div><div class="r"><b>Net Amount: 4074.56</b></div>`),
+  purchaseMono: bill(`<h2 style="text-align:center">SRI SAI PHARMA DISTRIBUTORS</h2><div style="text-align:center">GSTIN 37ABCDE1234F1Z5</div><b>TAX INVOICE</b>
+<div>Invoice No: SSP/1182 &nbsp;&nbsp;&nbsp; Date: 21/10/2026</div>
+<pre style="font:22px 'Courier New',monospace">Sl Product                Batch   Exp    Qty   MRP     Amount
+1  PARACETAMOL 500MG TAB  PCM2611 09/27  10    25.00   185.00
+2  CETIRIZINE 10MG TAB    CTZ2201 03/27  5     18.00    65.00
+                                  Sub Total      250.00
+                                  CGST 6%         15.00
+                                  SGST 6%         15.00
+                                  Grand Total    280.00</pre>`),
+  sale: bill(`<h2 style="text-align:center">RxPx HOSPITALS PHARMACY</h2><b>CASH BILL</b><div>Bill No: PH/2026/3391 &nbsp;&nbsp; Date: 22/10/2026</div>
+<div>Patient Name: Ramesh Kumar &nbsp;&nbsp; UHID: RX10442 &nbsp;&nbsp; Dr. Suresh Babu</div>
+${table(['Sl', 'Medicine', 'Batch', 'Exp', 'Qty', 'MRP', 'Amount'], [
+    ['1', 'DOLO 650 TAB', 'DL6243', '08/28', '10', '33.60', '22.40'],
+    ['2', 'PAN 40 TAB', 'P40X921', '11/27', '15', '155.00', '155.00'],
+  ], 4)}<div class="r"><b>Total: 177.40</b></div><div>Payment Mode: UPI</div>`),
+  lab: bill(`<h2>RxPx HOSPITALS - DIAGNOSTIC LABORATORY</h2><div>Receipt No: LAB/7781 &nbsp;&nbsp; Date: 20/10/2026</div><div>Patient Name: Arun Prasad &nbsp; Age/Sex: 42/M</div>
+${table(['Test Name', 'Amount'], [['Complete Blood Count (CBC)', '350.00'], ['Lipid Profile', '600.00']], 1)}<div class="r"><b>Total Amount: 950.00</b></div>`),
+};
+
+function serve() {
+  const server = http.createServer((req, res) => {
+    const name = decodeURIComponent(new URL(req.url, 'http://x').pathname).replace(/^\/+/, '') || 'medical bills.html';
+    if (name !== 'medical bills.html' && name !== 'index.html') { res.writeHead(404); return res.end(); }
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
+    res.end(fs.readFileSync(path.join(root, 'medical bills.html')));
+  });
+  return new Promise(done => server.listen(0, '127.0.0.1', () => done(server)));
+}
+async function routeCdn(context) {
+  if (!CDN_DIR) return;
+  await context.route(/^https:\/\/(cdn\.jsdelivr\.net|cdnjs\.cloudflare\.com|cdn\.sheetjs\.com|fonts\.googleapis\.com|fonts\.gstatic\.com)\//, route => {
+    const url = route.request().url();
+    if (/fonts\.g/.test(url)) return route.fulfill({ status: 200, contentType: 'text/css', body: '' });
+    for (const [re, to] of CDN) {
+      const m = url.match(re);
+      if (!m) continue;
+      const file = path.join(CDN_DIR, to(m));
+      if (fs.existsSync(file)) return route.fulfill({ status: 200, body: fs.readFileSync(file), contentType: file.endsWith('.js') ? 'text/javascript' : 'application/octet-stream', headers: { 'access-control-allow-origin': '*' } });
+    }
+    return route.abort();
+  });
+}
+
+(async () => {
+  const server = await serve();
+  const url = `http://127.0.0.1:${server.address().port}/`;
+  const browser = await playwright.chromium.launch();
+  let passed = 0;
+  const ok = (cond, msg) => { assert.ok(cond, msg); passed++; console.log('  ✓', msg); };
+  try {
+    const render = async (html, pdf) => {
+      const p = await browser.newPage({ viewport: { width: 1180, height: 900 } });
+      await p.setContent(html);
+      const buffer = pdf ? await p.pdf({ format: 'A4', printBackground: true }) : await p.screenshot({ fullPage: true });
+      await p.close();
+      return buffer;
+    };
+    const files = {};
+    for (const [k, h] of Object.entries(BILLS)) files[k] = await render(h);
+    files.labPdf = await render(BILLS.lab, true);
+
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, acceptDownloads: true });
+    await routeCdn(context);
+    // data and session left by the earlier version of the page
+    await context.addInitScript(() => {
+      if (localStorage.getItem('__seeded')) return;
+      localStorage.setItem('__seeded', '1');
+      localStorage.setItem('rxpx-session-v1', JSON.stringify({ name: 'Old User', email: 'old@rxpx.test', admin: true }));
+      localStorage.setItem('hospital-bills-preview-v1', JSON.stringify({ bills: [{ id: 'legacy-1', type: 'medicine_purchase', bill_number: 'OLD-9', bill_date: '2026-09-01', party: 'Old Supplier', total: 500, tax: 0, disc: 0, notes: 'x'.repeat(4000), items: [{ description: 'AMLODIPINE 5MG TAB', batch_no: 'AML1', expiry_date: '2027-06-30', quantity: 10, amount: 400 }], file: null, by: 'Old', at: '2026-09-01T10:00:00.000Z', warnings: [] }], meds: [{ id: 'm-old', name: 'AMLODIPINE 5MG TAB', key: 'AMLODIPINE 5MG TAB', batch: 'AML1', qty: 10, expiry: '2027-06-30' }], lastUpload: null }));
+    });
+    const page = await context.newPage();
+    const errors = [];
+    page.on('pageerror', e => errors.push(String(e)));
+    await page.goto(url);
+    await page.waitForFunction(() => typeof S !== 'undefined' && (S.view !== 'login' || document.querySelector('#app').innerText.length > 20));
+    const S = expr => page.evaluate(new Function('return (' + expr + ')'));
+    const text = () => page.evaluate(() => document.querySelector('#app').innerText);
+    const idle = async () => { for (let i = 0; i < 600; i++) { const v = await S('({v:S.view,bad:S.bad,busy:S.busy})'); if ((v.v !== 'proc' || v.bad) && !v.busy) return v; await page.waitForTimeout(250); } throw new Error('reading did not finish'); };
+    const upload = async (party, input, name, mimeType, buffer, type) => {
+      await page.evaluate(p => { A.newbill(); S.flow = 'newName'; S.partyName = p; go('upload'); }, party);
+      await page.setInputFiles(input, { name, mimeType, buffer });
+      await page.click('[data-a="submit"]');
+      const v = await idle();
+      if (v.v === 'kind') { await page.click(`[data-a="pickType"][data-t="${type}"]`); await page.click('[data-a="saveKind"]'); await page.waitForFunction(() => !S.busy && S.view !== 'kind'); }
+    };
+    const typed = async (party, fields) => {
+      await page.evaluate(([p, f]) => { S.file = null; S.partyName = p; A.manual(); Object.assign(S.edit, f); return A.saveEdit(); }, [party, fields]);
+      await page.waitForFunction(() => !S.busy);
+    };
+
+    console.log('Saved data');
+    ok(await S('DATA.idb') && await S('S.bills.length') === 1, 'earlier data moved into IndexedDB');
+    ok(await page.evaluate(() => localStorage.getItem('hospital-bills-preview-v1')) === null, 'browser-storage copy removed');
+    ok(!(await S('"notes" in S.bills[0]')), 'unused OCR text no longer kept');
+    await page.evaluate(() => { S.detail = 'legacy-1'; A.edit(); S.edit.bill_number = 'OLD-9A'; return A.saveEdit(); });
+    ok(await S('S.meds.find(m=>m.id=="m-old").qty') === 10, 'editing a bill without stock history does not add its stock again');
+
+    console.log('Accounts');
+    const auth = async (mode, fields) => {
+      await page.evaluate(() => A.out());
+      await page.click(`[data-a="mode"][data-m="${mode}"]`);
+      for (const [k, v] of Object.entries(fields)) await page.fill(`[data-k="auth.${k}"]`, v);
+      await page.click('[data-a="auth"]');
+      await page.waitForFunction(() => !S.busy);
+    };
+    await auth('up', { name: 'Kumar Staff', email: 'staff@rxpx.test', pw: 'secret123', pw2: 'secret123' });
+    ok(await S('S.user && S.user.name') === 'Kumar Staff', 'create account');
+    ok(!(await page.evaluate(() => localStorage.getItem('rxpx-accounts-v1'))).includes('secret123'), 'password kept only as a hash');
+    await auth('in', { email: 'staff@rxpx.test', pw: 'wrong-pass' });
+    ok(!(await S('S.user')) && /Wrong password/.test(await text()), 'wrong password refused');
+    await auth('in', { email: 'nobody@rxpx.test', pw: 'secret123' });
+    ok(/No account/.test(await text()), 'unknown email refused');
+    await auth('up', { name: 'Other', email: 'staff@rxpx.test', pw: 'another1', pw2: 'another1' });
+    ok(/already exists/.test(await text()), 'existing email cannot be registered again');
+    await auth('in', { email: 'Staff@RxPx.test', pw: 'secret123' });
+    ok(await S('S.user && S.user.name') === 'Kumar Staff', 'sign in keeps the registered name');
+
+    console.log('Reading bills and stock');
+    await upload('Sri Sai Pharma', '#f2', 'invoice.png', 'image/png', files.purchaseMono, 'medicine_purchase');
+    ok(await S('S.meds.some(m=>m.name=="PARACETAMOL 500MG TAB"&&m.batch=="PCM2611")'), 'medicine form and strength stay in the name, not the batch');
+    await upload('Lakshmi Medical Agencies', '#f2', 'gst.png', 'image/png', files.purchase, 'medicine_purchase');
+    ok(await S('S.meds.find(m=>m.batch=="DL6243").qty') === 22, 'purchase adds 20 + 2 free strips');
+    await page.evaluate(() => { S.mform = { name: 'DOLO 650 TAB', batch: 'OLDX1', qty: '5', manufacture_date: '2023-01-01', expiry: '2024-01-31', supplier: 'Old' }; return A.savemed(); });
+    await typed('Walk-in', { type: 'pharmacy_sales', bill_number: 'PH-1', total: '33.60', items: [{ description: 'DOLO 650', quantity: 1, mrp: '33.60', amount: '33.60' }] });
+    ok(await S('S.meds.find(m=>m.batch=="OLDX1").qty') === 5 && await S('S.meds.find(m=>m.batch=="DL6243").qty') === 21, 'sale uses the unexpired batch and matches "DOLO 650" to "DOLO 650 TAB"');
+    await upload('Ramesh Kumar', '#f2', 'sale.png', 'image/png', files.sale, 'pharmacy_sales');
+    ok(!(await S('S.lastUpload.shortage')) && Math.abs(await S('S.meds.find(m=>m.batch=="DL6243").qty') - 20.333) < 0.01, 'pharmacy sale photo takes 10 tablets (2/3 strip) from stock');
+    await upload('Arun Prasad', '#f3', 'lab.pdf', 'application/pdf', files.labPdf, 'lab');
+    ok(await S('S.bills[0].type') === 'lab' && await S('S.bills[0].total') === 950, 'lab bill PDF read');
+
+    console.log('Duplicates, edits, deletes');
+    await upload('Sri Sai Pharma', '#f2', 'invoice.png', 'image/png', files.purchaseMono, 'medicine_purchase');
+    ok(!!(await S('S.dup')), 'same photo again is blocked');
+    const n = await S('S.bills.length');
+    await typed('Another Supplier', { type: 'expense', bill_number: 'SSP/1182', bill_date: '2026-10-21', total: '750', items: [{ description: 'Printer cartridge', quantity: 1, amount: '750' }] });
+    ok(await S('S.bills.length') === n + 1, 'same bill number from another supplier is saved');
+    const pid = await S('S.bills.find(b=>b.bill_number=="LMA-4471").id');
+    await page.evaluate(id => { S.detail = id; A.edit(); S.edit.items.find(i => i.description == 'MONTEK LC TAB').quantity = '12'; return A.saveEdit(); }, pid);
+    ok(await S('S.meds.find(m=>m.name=="MONTEK LC TAB").qty') === 12, 'purchase bill can be corrected after some of its stock was sold');
+    await page.evaluate(id => { S.detail = id; A.edit(); const i = S.edit.items.find(x => x.description == 'DOLO 650 TAB'); i.quantity = '0'; i.free = '0'; return A.saveEdit(); }, pid);
+    ok(/Cannot reduce DOLO 650 TAB/.test(await S('S.msg')), 'but it cannot take back stock that was already sold');
+    await page.evaluate(() => A.cancelEdit());
+    const labId = await S('S.bills.find(b=>b.type=="lab").id');
+    await page.evaluate(id => { S.detail = id; return A.del(); }, labId);
+    ok(!(await S(`S.bills.some(b=>b.id=="${labId}")`)), 'bill deleted');
+
+    console.log('Reports and export');
+    await page.evaluate(() => { S.rep = 'all'; go('reports'); });
+    const rep = await text();
+    ok(/Revenue \(\d+ bills?\)/.test(rep) && /Expenses \(\d+ bills?\)/.test(rep), 'All bills keeps revenue and expenses apart');
+    const download = page.waitForEvent('download');
+    await page.click('[data-a="export"]');
+    const file = await (await download).path();
+    if (XLSX) {
+      const rows = XLSX.utils.sheet_to_json(XLSX.read(fs.readFileSync(file)).Sheets['All bills']);
+      ok(rows.some(r => /^Total revenue/.test(r.Name)) && rows.some(r => /^Total expenses/.test(r.Name)), 'Excel has separate revenue and expense totals');
+    } else console.log('  - Excel content check skipped (install xlsx to run it)');
+    await page.evaluate(() => { S.bills[0].party = '=HYPERLINK("http://x","y")'; });
+    const csvDownload = page.waitForEvent('download');
+    await page.evaluate(() => { const x = window.XLSX; window.XLSX = undefined; try { exportReport(); } finally { window.XLSX = x; } });
+    ok(fs.readFileSync(await (await csvDownload).path(), 'utf8').includes(`"'=HYPERLINK(`), 'CSV export does not create formulas');
+
+    console.log('Two tabs');
+    const second = await context.newPage();
+    await second.goto(url);
+    await second.waitForFunction(() => typeof S !== 'undefined' && S.user);
+    const before = await second.evaluate(() => S.bills.length);
+    await typed('Tab one', { type: 'expense', bill_number: 'T1', total: '100', items: [{ description: 'Diesel', quantity: 1, amount: '100' }] });
+    await second.waitForFunction(n => S.bills.length === n + 1, before);
+    await second.evaluate(() => { S.partyName = 'Tab two'; A.manual(); Object.assign(S.edit, { type: 'expense', bill_number: 'T2', total: '200', items: [{ description: 'Water', quantity: 1, amount: '200' }] }); return A.saveEdit(); });
+    await page.reload();
+    await page.waitForFunction(() => typeof S !== 'undefined' && S.user);
+    const numbers = await S('S.bills.map(b=>b.bill_number)');
+    ok(numbers.includes('T1') && numbers.includes('T2'), 'bills saved in two tabs are both kept');
+    ok(!errors.length, 'no script errors' + (errors.length ? ': ' + errors.join('; ') : ''));
+    console.log(`\n${passed} checks passed`);
+  } finally {
+    await browser.close();
+    server.close();
+  }
+})().catch(error => { console.error(error); process.exitCode = 1; });

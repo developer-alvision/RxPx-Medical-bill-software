@@ -49,17 +49,28 @@ function readConfig(root, env = process.env, requireConfig = false) {
 
 function build({ root = path.resolve(__dirname, '..'), env = process.env, requireConfig = false, checkOnly = false } = {}) {
   root = path.resolve(root);
-  const config = readConfig(root, env, requireConfig);
   const html = fs.readFileSync(path.join(root, 'medical bills.html'), 'utf8');
   if (!/<meta charset="utf-8">/i.test(html)) throw new Error('The page must declare UTF-8 for rupees and hospital text.');
-  const payload = new Map([['index.html', html], ['medical bills.html', html]]);
-  for (const file of PUBLIC_FILES) payload.set(file, fs.readFileSync(path.join(root, file), 'utf8'));
-  for (const match of html.matchAll(/<script\b[^>]*\bsrc="([^"]+)"/gi)) {
-    if (/^https:\/\//.test(match[1])) continue;
-    if (!PUBLIC_FILES.includes(match[1]) || !payload.has(match[1])) throw new Error('A local browser script is missing from the public build.');
-    new vm.Script(payload.get(match[1]), { filename: match[1] });
+  // Two pasted pages make the second page's script fail and its styles override the first page.
+  if ((html.match(/<!doctype html/gi) || []).length > 1 || (html.match(/<html\b/gi) || []).length > 1) {
+    throw new Error('The page contains more than one HTML document. Keep a single <!doctype html> page.');
   }
-  payload.set('app-config.js', '// Generated public browser configuration. No server secrets.\nwindow.RXPX_CONFIG = ' + JSON.stringify(config, null, 2) + ';\n');
+  for (const match of html.matchAll(/<script\b(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi)) {
+    try { new vm.Script(match[1], { filename: 'medical bills.html (inline script)' }); }
+    catch (error) { throw new Error('The page script has a syntax error: ' + error.message); }
+  }
+  const localScripts = [...html.matchAll(/<script\b[^>]*\bsrc="([^"]+)"/gi)].map(match => match[1]).filter(src => !/^https:\/\//.test(src));
+  // Only the Supabase version of the page loads app-config.js; the browser-only page needs no connection settings.
+  const usesConfig = localScripts.includes('app-config.js');
+  const config = usesConfig ? readConfig(root, env, requireConfig) : null;
+  const payload = new Map([['index.html', html], ['medical bills.html', html]]);
+  if (usesConfig) for (const file of PUBLIC_FILES) payload.set(file, fs.readFileSync(path.join(root, file), 'utf8'));
+  for (const src of localScripts) {
+    if (!PUBLIC_FILES.includes(src) || !fs.existsSync(path.join(root, src))) throw new Error('A local browser script is missing from the public build.');
+    if (!payload.has(src)) payload.set(src, fs.readFileSync(path.join(root, src), 'utf8'));
+    new vm.Script(payload.get(src), { filename: src });
+  }
+  if (usesConfig) payload.set('app-config.js', '// Generated public browser configuration. No server secrets.\nwindow.RXPX_CONFIG = ' + JSON.stringify(config, null, 2) + ';\n');
   payload.set('_headers', '/*\n  Cache-Control: no-store\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: strict-origin-when-cross-origin\n');
   if (!checkOnly) {
     const output = path.resolve(root, 'dist');
@@ -72,15 +83,18 @@ function build({ root = path.resolve(__dirname, '..'), env = process.env, requir
     fs.mkdirSync(output);
     for (const [name, content] of payload) fs.writeFileSync(path.join(output, name), content, 'utf8');
   }
-  return { configured: !!config.supabaseUrl, aiExtraction: config.aiExtraction, files: [...payload.keys()] };
+  return { configured: !!config?.supabaseUrl, usesSupabase: usesConfig, aiExtraction: !!config?.aiExtraction, files: [...payload.keys()] };
 }
 
 if (require.main === module) {
   try {
     const result = build({ requireConfig: process.argv.includes('--require-config'), checkOnly: process.argv.includes('--check') });
     console.log((process.argv.includes('--check') ? 'Static preflight passed.' : 'Static build ready in dist/.') + ' ' + result.files.length + ' public files validated.');
-    if (!result.configured) console.log('SETUP REQUIRED: This preview opens the connection screen. Production builds require your public Supabase settings.');
-    console.log('Live database migration, Auth redirects, and optional AI secrets/origins still need verification in your Supabase project.');
+    if (!result.usesSupabase) console.log('This page keeps bills and stock in the browser; it needs no Supabase settings.');
+    else {
+      if (!result.configured) console.log('SETUP REQUIRED: This preview opens the connection screen. Production builds require your public Supabase settings.');
+      console.log('Live database migration, Auth redirects, and optional AI secrets/origins still need verification in your Supabase project.');
+    }
   } catch (error) { console.error('Build blocked: ' + error.message); process.exitCode = 1; }
 }
 module.exports = { build, readConfig, PUBLIC_FILES };
