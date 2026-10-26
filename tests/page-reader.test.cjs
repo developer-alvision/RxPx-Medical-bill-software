@@ -1,6 +1,7 @@
 'use strict';
 // The bill reader inside 'medical bills.html' (the page the app actually runs), checked on
-// Tesseract output for six bill types. Run: node --test tests/page-reader.test.cjs
+// Tesseract output for six bill types, plus receipts with the print around their items and the
+// corner maths of the photo editor. Run: node --test tests/page-reader.test.cjs
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -60,4 +61,133 @@ test('in-patient bill, lab bill and an electrical repair bill', () => {
   assert.deepEqual([lab.type, lab.bill_number, lab.total_amount, lab.items.length, lab.payment_mode], ['lab', 'LAB/7781', 1950, 4, 'Cash']);
   const ex = read('expense');
   assert.deepEqual([ex.type, ex.bill_number, ex.total_amount, ex.tax_amount, ex.items.length], ['expense', 'SKE-0332', 5605, 855, 3]);
+});
+
+// Word boxes like the reader's for a block of fixed-width text (one character = 12 px wide)
+const mono = text => ({ source: 'ocr', lines: text.split('\n').filter(l => l.trim()).map((l, r) => ({ toks: [...l.matchAll(/\S+/g)].map(m => ({ t: m[0], x0: m.index * 12, x1: (m.index + m[0].length) * 12, y0: r * 30, y1: r * 30 + 22, c: 90 })) })) });
+const readText = text => JSON.parse(JSON.stringify(BillParser.parse(mono(text), { hospitalKey: 'rxpx', today: '2026-10-25' })));
+
+test('pharmacy receipt: batch and expiry lines join their item; counts, totals and greetings are not items', () => {
+  const d = readText(`
+      SRI LAKSHMI MEDICALS
+  Opp. Govt Hospital, Main Road
+  Ph: 08571-221133, 9440112233
+    GSTIN: 37ABCPL7788M1Z9
+Bill No : SLM/7741   Date: 23/1O/2026
+Patient : K. Venkata Ramana
+Item               Qty   MRP    Amount
+DOLO 650 TAB        15   2.24    33.60
+  B:DL6243  E:08/28
+AZITHRAL 500 TAB     3  23.90    71.70
+  B:AZ24117 E:05/27
+PAN-D CAP           10  15.50   155.00
+  B:PND4410 E:10/27
+Items: 4             Qty: 28
+Gross Amount                260.30
+Discount (10%)               26.03
+Net Amount                  234.27
+Round Off                    -0.27
+TOTAL                       234.00
+You Saved Rs. 26.03
+Paid: Cash 234.00   Balance: 0.00
+Goods once sold cannot be taken back
+      ** GET WELL SOON **`);
+  assert.equal(d.bill_number, 'SLM/7741');
+  assert.equal(d.bill_date, '2026-10-23'); // "1O" read for "10"
+  assert.equal(d.total_amount, 234);
+  assert.equal(d.discount_amount, 26.03);
+  assert.deepEqual(d.items.map(i => [i.description, i.batch_no, i.expiry_date, i.quantity, i.amount]), [
+    ['DOLO 650 TAB', 'DL6243', '2028-08-31', 15, 33.6],
+    ['AZITHRAL 500 TAB', 'AZ24117', '2027-05-31', 3, 71.7],
+    ['PAN-D CAP', 'PND4410', '2027-10-31', 10, 155],
+  ]);
+  assert.ok(!d.warnings.includes('sum_mismatch'), d.warnings.join());
+});
+
+test('receipt without a table heading: phone, timings and sample lines are left out', () => {
+  const d = readText(`
+CITY DIAGNOSTICS
+Ph: 08571-229900    Lab timings: 7.00 AM to 9.00 PM
+Receipt No: LB/4471    Date: 24/10/2026
+Patient: Mrs. S. Padmavathi   Age: 56
+Sample Collected      09.40
+Complete Blood Picture        300.00
+HbA1c                         450.00
+Fasting Blood Sugar            80.00
+Serum Creatinine              200.00
+Gross Total                  1030.00
+Discount (Sr. Citizen 10%)    103.00
+Net Amount                    927.00
+Thank you. Visit again`);
+  assert.deepEqual([d.bill_number, d.bill_date, d.total_amount, d.discount_amount], ['LB/4471', '2026-10-24', 927, 103]);
+  assert.deepEqual(d.items.map(i => [i.description, i.amount]), [['Complete Blood Picture', 300], ['HbA1c', 450], ['Fasting Blood Sugar', 80], ['Serum Creatinine', 200]]);
+  assert.ok(!d.warnings.includes('sum_mismatch'), d.warnings.join());
+});
+
+test('shop bill: bare "No:" bill number, and a later line starting with "Total" is not the total', () => {
+  const d = readText(`
+SRI RAMA GENERAL STORES
+Cell: 9989012345, 8885012345
+No: 2817                       Date: 19-10-2026
+M/s. RxPx Hospitals
+S.No Particulars               Qty   Rate   Amount
+1    Phenyl 5 Ltr Can           4  320.00  1280.00
+2    Register Book 200 Pages   10   60.00   600.00
+Total                                     1880.00
+Total Bags Delivered 3
+For SRI RAMA GENERAL STORES`);
+  assert.equal(d.bill_number, '2817');
+  assert.equal(d.bill_date, '2026-10-19');
+  assert.equal(d.total_amount, 1880);
+  assert.deepEqual(d.items.map(i => [i.description, i.quantity, i.amount]), [['Phenyl 5 Ltr Can', 4, 1280], ['Register Book 200 Pages', 10, 600]]);
+});
+
+test('a misread Total line is not an item; the amount in words picks the real items', () => {
+  const tota1 = readText(`
+S.No Particulars            Qty   Rate   Amount
+1    Phenyl 5 Ltr Can         4  320.00  1280.00
+2    Register Book           10   60.00   600.00
+3    Ball Pens Blue           3   50.00   150.00
+     Tota1                                2030.00`);
+  assert.deepEqual([tota1.total_amount, tota1.items.length], [2030, 3]);
+  const garbled = readText(`
+S.No Particulars            Qty   Rate   Amount
+1    Phenyl 5 Ltr Can         4  320.00  1280.00
+2    Register Book           10   60.00   600.00
+3    Ball Pens Blue           3   50.00   150.00
+     Grnd Tot                             2030.00
+Rupees Two Thousand Thirty Only`);
+  assert.equal(garbled.total_amount, 2030);
+  assert.deepEqual(garbled.items.map(i => i.description), ['Phenyl 5 Ltr Can', 'Register Book', 'Ball Pens Blue']);
+});
+
+test('bill corners: order, quarter turns and shape checks used by the photo editor', () => {
+  const src = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]).join('\n');
+  const start = src.indexOf('const BillCrop = (() => {'), stop = src.indexOf('})();', start);
+  assert.ok(start > 0 && stop > start, 'the page has the BillCrop block');
+  const box = { module: { exports: null } };
+  vm.runInNewContext(src.slice(start, stop + 5) + '\nmodule.exports = BillCrop;', box);
+  const C = box.module.exports, plain = v => JSON.parse(JSON.stringify(v));
+  const q = [[0.1, 0.2], [0.8, 0.15], [0.9, 0.85], [0.05, 0.9]];
+  assert.deepEqual(plain(C.order([q[2], q[0], q[3], q[1]])), q, 'corners come back as top-left, top-right, bottom-right, bottom-left');
+  const turned = C.turnQuad(q, 1);
+  assert.deepEqual(plain(turned[0]).map(v => +v.toFixed(3)), [0.1, 0.05], 'turning right moves the bottom-left corner to the top-left');
+  let back = q; for (let k = 0; k < 4; k++) back = C.turnQuad(back, 1);
+  assert.deepEqual(plain(back).map(p => p.map(v => +v.toFixed(6))), q, 'four quarter turns come back to the start');
+  assert.deepEqual(plain(C.turnQuad(C.turnQuad(q, 1), -1)).map(p => p.map(v => +v.toFixed(6))), q, 'right then left is no turn');
+  assert.ok(C.valid(q) && C.valid(C.FULL()) && C.isFull(C.FULL()) && !C.isFull(q));
+  assert.ok(!C.valid([[0.1, 0.2], [0.9, 0.85], [0.8, 0.15], [0.05, 0.9]]), 'a twisted frame is refused');
+  assert.ok(!C.valid([[0.1, 0.1], [0.12, 0.1], [0.12, 0.12], [0.1, 0.12]]), 'a tiny frame is refused');
+});
+
+test('two amounts that lost their decimal points are put right by the bill total', () => {
+  const d = readText(`
+S.No Product               Qty   Amount
+1    LIMCEE 500 CHEW TAB    25    46425
+2    BECOSULES CAP          12    46548
+3    ONDEM 4 TAB            15   558.15
+Sub Total                       1487.88
+Grand Total                     1487.88`);
+  assert.deepEqual(d.items.map(i => [i.description, i.amount]), [['LIMCEE 500 CHEW TAB', 464.25], ['BECOSULES CAP', 465.48], ['ONDEM 4 TAB', 558.15]]);
+  assert.ok(!d.warnings.includes('sum_mismatch'));
 });

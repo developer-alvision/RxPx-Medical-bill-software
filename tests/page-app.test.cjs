@@ -1,6 +1,6 @@
 /* Browser checks for the page the app runs ('medical bills.html'): accounts, saved data,
- * reading photo / PDF / Excel bills, stock in and out, expired batches, duplicates, edits,
- * deletes, reports, export and two open tabs.
+ * reading photo / PDF / Excel bills, the photo editor (frame on the bill's corners, turn),
+ * stock in and out, expired batches, duplicates, edits, deletes, reports, export and two open tabs.
  * Run: node tests/page-app.test.cjs
  * Needs Playwright with Chromium (or PLAYWRIGHT_PACKAGE) and internet access for the page's
  * CDN libraries. Offline: set RXPX_CDN_DIR to a node_modules folder holding lucide@0.469.0,
@@ -121,6 +121,7 @@ async function routeCdn(context) {
     const upload = async (party, input, name, mimeType, buffer, type) => {
       await page.evaluate(p => { A.newbill(); S.flow = 'newName'; S.partyName = p; go('upload'); }, party);
       await page.setInputFiles(input, { name, mimeType, buffer });
+      if (mimeType.startsWith('image/')) await page.waitForSelector('#crop .ch', { timeout: 20000 });
       await page.click('[data-a="submit"]');
       const v = await idle();
       if (v.v === 'kind') { await page.click(`[data-a="pickType"][data-t="${type}"]`); await page.click('[data-a="saveKind"]'); await page.waitForFunction(() => !S.busy && S.view !== 'kind'); }
@@ -169,6 +170,45 @@ async function routeCdn(context) {
     ok(!(await S('S.lastUpload.shortage')) && Math.abs(await S('S.meds.find(m=>m.batch=="DL6243").qty') - 20.333) < 0.01, 'pharmacy sale photo takes 10 tablets (2/3 strip) from stock');
     await upload('Arun Prasad', '#f3', 'lab.pdf', 'application/pdf', files.labPdf, 'lab');
     ok(await S('S.bills[0].type') === 'lab' && await S('S.bills[0].total') === 950, 'lab bill PDF read');
+
+    console.log('Photo editor');
+    // a lab bill photographed on a dark table, a little turned and tilted
+    const shot = await browser.newPage({ viewport: { width: 900, height: 1200 } });
+    await shot.setContent(`<html><head><style>${css}</style></head><body style="margin:0;background:#4a3a2c;width:900px;height:1200px;overflow:hidden"><div style="position:absolute;left:50%;top:48%;perspective:1600px"><div id="w" style="position:absolute;width:760px;left:-380px;top:-330px;background:#fff;transform:rotateX(9deg) rotateZ(-4deg);box-shadow:0 12px 30px rgba(0,0,0,.5)"><div style="padding:28px"><h2 style="margin:0 0 10px">RxPx HOSPITALS - LABORATORY</h2><div>Receipt No: LAB/7790 &nbsp;&nbsp; Date: 21/10/2026</div><div>Patient Name: Meena Kumari &nbsp; Age/Sex: 35/F</div>
+${table(['Test Name', 'Amount'], [['Thyroid Profile (T3 T4 TSH)', '550.00'], ['Vitamin D3 Total', '1200.00'], ['Serum Calcium', '250.00']], 1)}<div class="r"><b>Total Amount: 2000.00</b></div><div>Paid by Cash. Thank you.</div></div>
+${['left:0;top:0', 'right:0;top:0', 'right:0;bottom:0', 'left:0;bottom:0'].map(p => `<i class="m" style="position:absolute;width:1px;height:1px;${p}"></i>`).join('')}</div></div></body></html>`);
+    const corners = await shot.evaluate(() => [...document.querySelectorAll('.m')].map(m => { const r = m.getBoundingClientRect(); return [r.left / 900, r.top / 1200] }));
+    const tablePhoto = await shot.screenshot({ type: 'jpeg', quality: 85 });
+    await shot.close();
+    await page.evaluate(() => { A.newbill(); S.flow = 'newName'; S.partyName = 'Meena Kumari'; go('upload'); });
+    await page.setInputFiles('#f2', { name: 'lab-photo.jpg', mimeType: 'image/jpeg', buffer: tablePhoto });
+    await page.waitForSelector('#crop .ch', { timeout: 20000 });
+    const auto = await S('S.file.quad');
+    ok(auto.every((p, i) => Math.hypot(p[0] - corners[i][0], p[1] - corners[i][1]) < 0.02), 'the frame is put on the bill\'s corners by itself');
+    const handle = await (await page.$('#crop .ch[data-h="0"]')).boundingBox(), box = await (await page.$('#crop')).boundingBox();
+    await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2); await page.mouse.down();
+    await page.mouse.move(handle.x + handle.width / 2 + 24, handle.y + handle.height / 2 + 30, { steps: 5 });
+    ok(await page.$eval('#loupe', l => !l.hidden), 'a magnified view shows while a corner is dragged');
+    await page.mouse.up();
+    const moved = await S('S.file.quad[0]');
+    ok(Math.abs((moved[0] - auto[0][0]) * box.width - 24) < 3 && Math.abs((moved[1] - auto[0][1]) * box.height - 30) < 3, 'a dragged corner follows the finger');
+    await page.click('[data-a="turn"][data-d="1"]');
+    const turnedView = await S('({rot:S.file.rot,w:EDIT.view.width,h:EDIT.view.height,q:S.file.quad})');
+    ok(turnedView.rot === 1 && turnedView.w > turnedView.h && Math.abs(turnedView.q[1][0] - (1 - moved[1])) < 0.002, 'Turn right turns the photo and its frame');
+    await page.click('[data-a="turn"][data-d="-1"]');
+    await page.click('[data-a="cropAll"]');
+    ok(await S('BillCrop.isFull(S.file.quad)'), 'Whole photo uses the whole picture');
+    await page.click('[data-a="cropFit"]');
+    ok(await S('sameQuad(S.file.quad,S.file.auto)'), 'Fit to bill puts the frame back on the bill');
+    await page.click('[data-a="submit"]');
+    let v = await idle();
+    if (v.v === 'kind') { await page.click('[data-a="pickType"][data-t="lab"]'); await page.click('[data-a="saveKind"]'); await page.waitForFunction(() => !S.busy && S.view !== 'kind'); }
+    const lab2 = await S('({no:S.bills[0].bill_number,total:S.bills[0].total,items:S.bills[0].items.map(i=>i.description+"="+i.amount)})');
+    ok(lab2.no === 'LAB/7790' && lab2.total === 2000 && lab2.items.length === 3, 'the framed photo is read: ' + JSON.stringify(lab2));
+    await page.waitForFunction(() => S.bills[0].file && S.bills[0].file.stored, null, { timeout: 15000 });
+    const kept = await page.evaluate(async () => { const b = await IDB.get(S.bills[0].id); const i = await createImageBitmap(b); return i.width / i.height; });
+    const billRatio = Math.hypot((corners[1][0] - corners[0][0]) * 900, (corners[1][1] - corners[0][1]) * 1200) / Math.hypot((corners[3][0] - corners[0][0]) * 900, (corners[3][1] - corners[0][1]) * 1200);
+    ok(Math.abs(kept - billRatio) / billRatio < 0.06, 'the saved copy is the flattened bill, not the whole photo');
 
     console.log('Duplicates, edits, deletes');
     await upload('Sri Sai Pharma', '#f2', 'invoice.png', 'image/png', files.purchaseMono, 'medicine_purchase');

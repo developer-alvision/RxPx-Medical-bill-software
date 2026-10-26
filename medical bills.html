@@ -96,6 +96,24 @@ th{position:sticky;top:0;background:var(--cd)}
 tr:last-child td{border-bottom:0}
 @media(min-width:768px){.mob{display:none}}
 
+/* photo editor: turn the photo and frame the bill before reading */
+.crop{position:relative;margin-left:auto;margin-right:auto;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.crop #cropimg{display:block;width:100%;height:100%;border-radius:10px;background:hsl(var(--border)/.5)}
+.crop svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible}
+.cshade{fill:rgb(0 0 0/.5)}.cline{fill:none;stroke:var(--ac);stroke-width:2.5px;vector-effect:non-scaling-stroke}
+.ch,.ce{position:absolute;transform:translate(-50%,-50%);width:44px;height:44px;padding:0;touch-action:none;cursor:grab;z-index:1}
+.ch::after{content:'';position:absolute;inset:11px;border-radius:50%;background:#fff;border:3px solid var(--ac);box-shadow:0 1px 4px rgb(0 0 0/.45)}
+.ce::after{content:'';position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);border-radius:6px;background:#fff;border:2px solid var(--ac);box-shadow:0 1px 3px rgb(0 0 0/.4)}
+.ce.h::after{width:28px;height:10px}.ce.v::after{width:10px;height:28px}
+.ch.on,.ce.on{cursor:grabbing}.ch.on::after,.ce.on::after{background:var(--ac)}
+.ch:focus-visible,.ce:focus-visible{outline:none}.ch:focus-visible::after,.ce:focus-visible::after{box-shadow:0 0 0 3px var(--pr)}
+.loupe{position:absolute;top:8px;width:112px;height:112px;border-radius:50%;border:3px solid #fff;box-shadow:0 2px 12px rgb(0 0 0/.45);pointer-events:none;z-index:2;background:#fff}
+.ctools{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.ctools .btn{min-height:60px;margin:0;padding:6px 2px;font-size:12.5px;line-height:1.15;gap:4px;flex-direction:column;border-radius:12px;text-align:center}
+.ctools .btn.on{border-color:var(--ac);background:hsl(var(--accent)/.08);color:var(--act)}
+.cropwait{display:flex;align-items:center;justify-content:center;gap:10px;min-height:240px;border-radius:12px;background:hsl(var(--border)/.4);color:var(--mu);font-size:14px}
+.spin{width:20px;height:20px;border-radius:50%;border:2.5px solid var(--bd);border-top-color:var(--ac);animation:sp 1s linear infinite;flex:none}
+
 /* bill reading additions */
 .prevbox{overflow:hidden;text-align:center;border-radius:12px;background:hsl(var(--border)/.4)}
 .prevbox .prev{display:block;margin:0 auto;transition:transform .2s ease-out;background:none}
@@ -209,7 +227,7 @@ const BillParser = (() => {
   /* ---------- dates ---------- */
   // every date-looking piece of text, in reading order
   function findDates(text, today = new Date()) {
-    const out = [], t = String(text || '');
+    const out = [], t = String(text || '').replace(/[0-9OoIl|]{1,2}\s?[\/\-.]\s?[0-9OoIl|]{1,2}\s?[\/\-.]\s?(?:[0-9OoIlSZ|]{4}|[0-9OoIl|]{2})(?![0-9A-Za-z])/g, m => (m.match(/\d/g) || []).length >= 3 ? m.replace(/[Oo]/g, '0').replace(/[Il|]/g, '1').replace(/S/g, '5').replace(/Z/g, '2') : m);
     const push = (i, y, m, d) => { const v = mk(+y, +m, +d); if (v) out.push({ i, v }) };
     let r;
     const re1 = /\b(20\d{2})[-\/.](\d{1,2})[-\/.](\d{1,2})\b/g;
@@ -285,11 +303,11 @@ const BillParser = (() => {
           const total = parts.join(' ').length, span = (k.x1 - k.x0) / Math.max(1, total);
           let off = 0;
           for (const p of parts) { const c = cleanTok(p); if (c) toks.push({ ...k, t: c, x0: k.x0 + off * span, x1: k.x0 + (off + p.length) * span }); off += p.length + 1 }
-        } else { const c = cleanTok(k.t); if (c) toks.push({ ...k, t: c }) }
+        } else { const c = cleanTok(k.t); if (c && !(k.c !== undefined && k.c < 20 && c.length <= 3 && !/\d/.test(c))) toks.push({ ...k, t: c }) }
       }
       if (!toks.length) continue;
       toks.sort((a, b) => a.x0 - b.x0);
-      lines.push({ toks, text: toks.map(t => t.t).join(' '), y0: Math.min(...toks.map(t => t.y0)), y1: Math.max(...toks.map(t => t.y1)) });
+      lines.push({ toks, text: toks.map(t => t.t).join(' ').replace(/\bt[o0]t[a4@][l1i|]\b/gi, 'Total'), y0: Math.min(...toks.map(t => t.y0)), y1: Math.max(...toks.map(t => t.y1)) });
     }
     return lines;
   }
@@ -395,7 +413,21 @@ const BillParser = (() => {
     return letters(rest) <= 3;
   }
   const SEP = /^[-=_.*~\s]{3,}$/;
-  const FOOTER = /\b(?:taxable\s*(?:value|amount|amt)|sub\s*-?\s*total|grand\s*total|net\s*payable|total\s*qty|total\s*quantity|total\s*items|no\.?\s*of\s*items|items\s*:|amount\s*in\s*words|round\s*off|total\s*gst|total\s*tax|e\s*&\s*o\.?\s*e)\b/i;
+  const FOOTER = /\b(?:taxable\s*(?:value|amount|amt)|sub\s*-?\s*total|grand\s*total|net\s*payable|total\s*qty|total\s*quantity|total\s*items|no\.?\s*of\s*items|amount\s*in\s*words|round\s*off|total\s*gst|total\s*tax|e\s*&\s*o\.?\s*e)\b|\bitems?\s*:\s*\d|^\W*[il1|\[]?tems?\s*:\s*\d/i;
+  // print around the items that is never an item: licence and tax numbers, contact and bank
+  // details, terms, greetings and signatures
+  const JUNK = /\b(?:gstin|gst\s*(?:no|reg)|d\.?\s*l\.?\s*no|drug\s*lic\w*|fssai|cin\s*:|ph(?:one)?\s*(?:no\.?)?\s*:|mob(?:ile)?\s*(?:no\.?)?\s*:|cell\s*:|tel\s*:|e-?mail|www\.|a\s*\/\s*c\s*no|account\s*no|ifsc|bank\s*:|terms|conditions|goods\s*once|once\s*sold|taken\s*back|jurisdiction|signature|signatory|authori[sz]ed|thank\s*you|visit\s*again|get\s*well|wishing|lab\s*timings?|timings\s*:|pharmacist|declaration|we\s*declare|you\s*saved|check\s*expiry|balance\s*:)\b|@\S+\.\w/i;
+  // a total or discount label with one letter misread ("ross Amount", "Jiscount", "Net Arnount")
+  const NEAR_SUM = ['subtotal', 'grossamount', 'grosstotal', 'grandtotal', 'netamount', 'netpayable', 'nettotal', 'discount', 'roundoff', 'totalqty', 'totalamount', 'billamount', 'amountpayable', 'taxableamount', 'taxablevalue', 'yousaved'];
+  function nearSummary(text) {
+    const words = text.replace(/^[^A-Za-z]+/, '').split(/\s+/).filter(Boolean);
+    for (const n of [1, 2]) {
+      if (words.length < n) break;
+      const k = words.slice(0, n).join('').toLowerCase().replace(/[^a-z]/g, '');
+      if (k.length >= 6 && NEAR_SUM.some(w => Math.abs(w.length - k.length) <= 1 && lev(k, w) <= 1)) return true;
+    }
+    return false;
+  }
 
   /* ---------- item helpers ---------- */
   const FORM = /\b(?:tab|tabs|tablet|tablets|cap|caps|capsule|capsules|syp|syr|syrup|susp|suspension|inj|injection|drops?|cream|gel|oint|ointment|powder|pwd|sachet|soln|solution|lotion|tube|inhaler|respules?|vial|amp|ampoule|iv|infusion|ml|mg|mcg|gm|g|kit|spray|soap|strip|bottle|patch|tabs?\.)\b/i;
@@ -441,6 +473,7 @@ const BillParser = (() => {
       if (exp && parseMonthDate(exp[1], true)) { it.expiry_date ||= parseMonthDate(exp[1], true); continue }
       keep.push(w);
     }
+    if (keep.length > 1 && /^[A-Za-z|]{1,2}$/.test(keep[0]) && /[a-z|]/.test(keep[0]) && /^[A-Z0-9]/.test(keep[1]) && keep.slice(1).join('').replace(/[^A-Z]/g, '').length >= 4) keep.shift();
     it.description = keep.join(' ').replace(/\s+/g, ' ').replace(/^[^A-Za-z0-9(]+|[^A-Za-z0-9)%.]+$/g, '').trim();
     if (!it.pack) { const m = it.description.match(/\b\d+\s*['’`]?S\b|\b\d+\s*[X*]\s*\d+\b/i); if (m) it.pack = m[0] }
     it.pack_n = packSize(it.pack) || (SINGLE.test(it.description) ? 1 : '');
@@ -492,7 +525,7 @@ const BillParser = (() => {
   function reconcile(items, t, exact = false) {
     if (exact) return;
     const sum = () => round2(items.reduce((s, i) => s + (+i.amount || 0), 0));
-    const targets = [t.sub, t.total !== '' ? t.total - (+t.tax || 0) + (+t.disc || 0) : '', t.total !== '' ? t.total + (+t.disc || 0) : '', t.total].filter(v => v !== '' && v > 0);
+    const targets = [t.sub, t.total !== '' ? t.total - (+t.tax || 0) + (+t.disc || 0) : '', t.total !== '' ? t.total + (+t.disc || 0) : '', t.total, t.words, t.words ? t.words - (+t.tax || 0) + (+t.disc || 0) : ''].filter(v => v !== '' && v !== undefined && v > 0);
     const hits = () => targets.some(v => Math.abs(v - sum()) <= 1.01);
     if (!targets.length || hits()) return;
     // 1) an amount that lost its decimal point
@@ -503,7 +536,24 @@ const BillParser = (() => {
         it.amount = old;
       }
     }
-    // 2) one row whose maths does not add up: give it the difference
+    // 1b) two or three amounts that lost their decimal points (small, blurry photos)
+    const cand = items.filter(it => it._dot && !it._dot.amount && +it.amount >= 100);
+    if (cand.length >= 2 && cand.length <= 10) {
+      const tryFix = set => { const old = set.map(it => it.amount); set.forEach(it => { it.amount = round2(+it.amount / 100) }); if (hits()) { set.forEach(it => { it._fixed = true }); return true } set.forEach((it, k) => { it.amount = old[k] }); return false };
+      for (let a = 0; a < cand.length; a++) for (let b = a + 1; b < cand.length; b++) { if (tryFix([cand[a], cand[b]])) return; for (let c = b + 1; c < cand.length; c++) if (tryFix([cand[a], cand[b], cand[c]])) return }
+    }
+    // 2) rows that are not items (an address or a footer line read as an item): keep the unbroken run
+    //    of rows, with at most one row left out, that adds up exactly to the bill's own total
+    if (items.length >= 2) {
+      const amt = items.map(i => +i.amount || 0), n = amt.length, pre = [0];
+      for (const a of amt) pre.push(round2(pre[pre.length - 1] + a));
+      const hit = v => targets.some(t => Math.abs(t - v) <= 1.01);
+      let keep = null;
+      for (let len = n - 1; len >= Math.max(1, Math.ceil(n * 0.5)) && !keep; len--) for (let a = 0; a + len <= n && !keep; a++) if (hit(pre[a + len] - pre[a])) keep = { a, b: a + len, skip: -1 };
+      for (let len = n; len >= Math.max(2, Math.ceil(n * 0.5)) && !keep; len--) for (let a = 0; a + len <= n && !keep; a++) for (let k = a; k < a + len && !keep; k++) if (hit(pre[a + len] - pre[a] - amt[k])) keep = { a, b: a + len, skip: k };
+      if (keep) { const kept = items.filter((_, i) => i >= keep.a && i < keep.b && i !== keep.skip); items.splice(0, items.length, ...kept); return }
+    }
+    // 3) one row whose maths does not add up: give it the difference
     const bad = items.filter(i => !i._ok);
     if (bad.length === 1) {
       for (const v of targets) {
@@ -534,13 +584,20 @@ const BillParser = (() => {
       const l = lines[i];
       if (SEP.test(l.text) || !l.toks.length) continue;
       if (isSummary(l.text) || FOOTER.test(l.text) && !l.toks.some(t => /^\d{1,2}[\/\-.]\d{2,4}$/.test(t.t))) { endAt = i; break }
+      if (JUNK.test(l.text) || items.length && nearSummary(l.text)) { if (items.length) { endAt = i; break } continue }
       const toks = l.toks.filter(t => mid(t) >= left && mid(t) <= right);
       if (!toks.length) continue;
+      const tagged = l.toks.map(t => /^(?:b|bt|batch|bno)[:.](.+)$/i.exec(t.t) || /^(?:e|ex|exp|expiry)[:.](.+)$/i.exec(t.t));
+      if (items.length && i - items[items.length - 1]._line <= 2 && l.toks.length <= 4 && tagged.every(Boolean)) {
+        const p = items[items.length - 1];
+        l.toks.forEach((t, k) => { const v = tagged[k][1]; if (/^e/i.test(t.t)) { const e = parseMonthDate(v, true); if (e && !p.expiry_date) p.expiry_date = e } else if (looksBatch(v) && !p.batch_no) p.batch_no = v.toUpperCase().replace(/[^A-Z0-9\-\/]/g, '') });
+        continue;
+      }
       const cells = {}, at = new Map();
       for (const t of toks) { const ci = colIdx(mid(t)); at.set(t, ci); (cells[cols[ci].kind] ||= []).push(t) }
       // name words that landed in a neighbouring column belong to the name
       const own = (cells.desc || []).filter(t => letters(t.t) >= 2);
-      for (const k of Object.keys(cells)) if (!WORDY.has(k)) {
+      for (const k of Object.keys(cells)) if (!WORDY.has(k) && k !== 'hsn') {
         const spill = cells[k].filter(t => letters(t.t) >= 2 && !digits(t.t) && !/^(?:rs|inr)\.?$/i.test(t.t) &&
           !((k === 'exp' || k === 'mfg') && monthOf(t.t)) && !(k === 'batch' && letters(t.t) <= 3 && cells[k].length > 1) &&
           (di < 0 || Math.abs(at.get(t) - di) <= 1 || k === 'sno'));
@@ -588,6 +645,7 @@ const BillParser = (() => {
       }
       const it = buildItem(cells, kinds);
       if (letters(it.description) < 3 || /^(?:total|sub\s*total|grand|net)\b/i.test(it.description)) continue;
+      if (+it.amount >= 1e7 && !it._dot.amount) continue;
       if (it.amount === '' && it.rate === '' && it.mrp === '' && it.quantity === '') continue;
       it._line = i;
       items.push(it);
@@ -607,14 +665,15 @@ const BillParser = (() => {
     const META = /\b(?:bill|invoice|receipt|date|gstin|gst\s*no|phone|ph|mobile|cell|email|address|patient|age|sex|uhid|ip\s*no|dr\.|doctor|ref|consultant|admission|discharge|pin|road|street|nagar|colony|district|state|andhra|telangana|karnataka|tamil|india|dl\s*no|d\.l|payment|mode|paid|thank|signature|signatory|authori[sz]ed|service\s*no|meter|category|due|units\s*consumed|name|to,?|m\/s)\b/i;
     for (let i = from; i < to; i++) {
       const l = lines[i];
-      if (SEP.test(l.text) || isSummary(l.text) || META.test(l.text)) continue;
+      if (SEP.test(l.text) || isSummary(l.text) || META.test(l.text) || JUNK.test(l.text) || nearSummary(l.text)) continue;
       const toks = l.toks.map(t => t.t);
       let j = toks.length;
       while (j > 0 && (money(toks[j - 1]) || isPct(toks[j - 1])) && !(letters(toks[j - 1]) > 1)) j--;
       const nums = toks.slice(j).filter(t => !isPct(t)).map(t => money(t)).filter(Boolean);
-      const name = toks.slice(0, j).join(' ').replace(/^\d{1,3}[.)]?\s+/, '').trim();
+      const name = toks.slice(0, j).join(' ').replace(/^\d{1,3}[.)]?\s+/, '').replace(/^\d{4,8}\s+(?=[A-Za-z])/, '').trim();
       if (!nums.length || letters(name) < 3) continue;
       const last = nums[nums.length - 1];
+      if (!last.dot && last.v >= 1e6 || !(last.v > 0)) continue;
       if (!last.dot && nums.length === 1 && last.v < 10) continue;
       const it = { description: name, batch_no: '', manufacture_date: '', expiry_date: '', quantity: 1, free: '', pack: '', pack_n: '', mrp: '', rate: '', disc: '', gst: '', amount: last.v, _ok: true, _dot: { amount: last.dot } };
       if (nums.length >= 3) {
@@ -670,6 +729,10 @@ const BillParser = (() => {
       if (re === pats[3]) v = v.replace(/\s+(?=\d)/g, '').split(' ')[0];
       if (digits(v) >= 1 && v.length >= 2 && !/^(?:date|dt)$/i.test(v) && !/^\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}$/.test(v)) return v;
     }
+    for (const l of lines.slice(0, Math.max(8, Math.ceil(lines.length * 0.35)))) { // a bare "No: 2817" near the top
+      const m = l.text.match(/^(?:bill\s*)?no\.?\s*[:#]\s*([A-Z0-9][A-Z0-9\/\-]{0,20})\b/i);
+      if (m && digits(m[1]) >= 1 && !findDates(m[1]).length) return m[1];
+    }
     for (const l of lines) { // OCR-damaged keyword: "lnvoice No", "Bil No", "Recelpt No"
       const toks = l.toks.map(t => t.t);
       for (let i = 1; i < toks.length - 1; i++) {
@@ -698,23 +761,36 @@ const BillParser = (() => {
     for (const l of lines.slice(0, top)) { if (BAD.test(l.text)) continue; const d = findDates(l.text, today)[0]; if (d) return d.v }
     return '';
   }
+  // "Total: 1,950.00", "Grand Total (Incl GST) Rs 7430" give their amount; "Total WBC Count 7800" does not
+  const LABEL_WORD = /^(?:amount|amt|value|payable|rs|inr|in|rupees|bill|net|incl|including|inclusive|excl|exclusive|gst|tax|taxes|of|all|after|round|rounded|off|total|grand|due|now|to|be|paid|cash|upi|card)$/i;
+  function labelMoney(text, idx) {
+    const toks = text.slice(idx).split(/\s+/).filter(Boolean);
+    for (let i = 0; i < toks.length; i++) {
+      const t = toks[i]; if (isPct(t) || /^@/.test(toks[i - 1] || '')) continue;
+      const m = money(t); if (m && (m.dot || m.v >= 1)) return m.v;
+      const w = t.replace(/[^A-Za-z]/g, ''); if (w.length >= 3 && !LABEL_WORD.test(w)) return '';
+    }
+    return '';
+  }
   function totals(lines, from) {
     const PRI = [
       /\b(?:grand\s*total|net\s*payable|amount\s*payable|total\s*payable|net\s*amount|net\s*amt|bill\s*amount|invoice\s*(?:total|amount|value)|amount\s*due|total\s*due|net\s*total|total\s*bill\s*amount|net\s*value)\b/i,
       /\b(?:total\s*amount|total\s*amt|total\s*rs|total)\b(?!\s*(?:qty|quantity|items?|units|disc|discount|gst|tax|savings|mrp|no))/i,
     ];
-    let total = '', sub = '';
+    let total = '', sub = '', at = -1;
     for (const re of PRI) {
       for (let i = lines.length - 1; i >= from; i--) {
         const l = lines[i];
         const m = l.text.match(re);
         if (!m) continue;
-        let v = firstMoneyAfter(l.text, m.index + m[0].length);
-        if (v === '' && lines[i + 1] && !/[a-z]{3}/i.test(lines[i + 1].text)) { const lm = lastMoney(lines[i + 1].text); if (lm) v = lm.v }
-        if (v !== '' && v > 0) { total = v; break }
+        let v = labelMoney(l.text, m.index + m[0].length);
+        const after = l.text.slice(m.index + m[0].length).replace(/[^A-Za-z]/g, ' ').trim().split(/\s+/).filter(w => w.length >= 3 && !LABEL_WORD.test(w));
+        if (v === '' && !after.length && lines[i + 1] && !/[a-z]{3}/i.test(lines[i + 1].text)) { const lm = lastMoney(lines[i + 1].text); if (lm) v = lm.v }
+        if (v !== '' && v > 0) { total = v; at = i; break }
       }
       if (total !== '') break;
     }
+    if (at >= 0) for (let i = lines.length - 1; i > at; i--) { const m = lines[i].text.match(PRI[1]); if (!m) continue; const v = labelMoney(lines[i].text, m.index + m[0].length); if (v !== '' && v !== total && Math.abs(v - total) <= 1) { total = v; break } }
     for (let i = from; i < lines.length; i++) { const m = lines[i].text.match(/\b(?:sub\s*-?\s*total|gross\s*(?:amount|amt|total|value)|taxable\s*(?:amount|value))\b/i); if (m) { const v = firstMoneyAfter(lines[i].text, m.index + m[0].length); if (v !== '') sub = v } }
     let tax = 0, taxSeen = false;
     for (let i = from; i < lines.length; i++) {
@@ -725,7 +801,7 @@ const BillParser = (() => {
       while ((m = re.exec(t))) { const v = firstMoneyAfter(t, m.index + m[0].length); if (v !== '' && v < 1e7) { tax += v; taxSeen = true } }
     }
     let disc = '';
-    for (let i = from; i < lines.length; i++) { const t = lines[i].text, m = t.match(/\b(?:less\s*:?\s*)?(?:discount|disc\s*amt|cash\s*discount)\b/i); if (m && isSummary(t)) { const v = firstMoneyAfter(t, m.index + m[0].length); if (v !== '') disc = v } }
+    for (let i = from; i < lines.length; i++) { const t = lines[i].text.replace(/\([^)]*\)/g, ' '), m = t.match(/\b(?:less\s*:?\s*)?(?:discount|disc\s*amt|cash\s*discount)\b/i); if (m && isSummary(t)) { const v = firstMoneyAfter(t, m.index + m[0].length); if (v !== '') disc = v } }
     let roff = 0;
     for (let i = from; i < lines.length; i++) { const t = lines[i].text, m = t.match(/\bround(?:ed)?\s*(?:off|of)\b|\br\s*\/\s*o\b/i); if (m) { const v = firstMoneyAfter(t, m.index + m[0].length); if (v !== '' && Math.abs(v) < 1) roff = v } }
     return { total, sub, tax: taxSeen ? round2(tax) : '', disc, roff };
@@ -810,13 +886,13 @@ const BillParser = (() => {
     d.bill_number ||= billNumber(lines);
     d.bill_date ||= billDate(lines, today);
     const t = totals(lines, hdr ? hdr.i + 1 : 0);
-    reconcile(items, t, doc.source === 'sheet');
+    const inWords = wordsAmount(text);
+    reconcile(items, { ...t, words: inWords }, doc.source === 'sheet');
     const itemsSum = round2(items.reduce((s, i) => s + (+i.amount || 0), 0));
     const calc = round2((t.sub || itemsSum) + (+t.tax || 0) - (+t.disc || 0) + (t.roff || 0));
     d.total_amount = t.total; d.tax_amount = t.tax; d.discount_amount = t.disc;
     if (d.tax_amount !== '' && (t.total !== '' ? d.tax_amount > t.total * 0.5 : itemsSum && d.tax_amount > itemsSum)) d.tax_amount = '';
     if (d.total_amount !== '' && itemsSum > 0 && d.total_amount < itemsSum * 0.5) d.total_amount = '';
-    const inWords = wordsAmount(text);
     if (inWords !== '' && (d.total_amount === '' || Math.abs(inWords - d.total_amount) > 1 && (Math.abs(inWords - calc) <= 1.01 || !near(calc, d.total_amount, 0.015)))) d.total_amount = inWords;
     if (d.total_amount === '' && itemsSum > 0) { d.total_amount = calc; d.warnings.push('total_calculated') }
     if (d.total_amount !== '' && itemsSum > 0 && d.total_amount > itemsSum * 2.2) d.warnings.push('items_missing');
@@ -838,7 +914,7 @@ const BillParser = (() => {
     }
     if (itemsSum > 0 && d.total_amount !== '' && !d.warnings.includes('total_calculated')) {
       const expect = [itemsSum, itemsSum + (+t.tax || 0), itemsSum - (+t.disc || 0), itemsSum + (+t.tax || 0) - (+t.disc || 0), t.sub || 0, (t.sub || 0) + (+t.tax || 0) - (+t.disc || 0)];
-      if (!expect.some(e => near(e, d.total_amount, 0.015) || Math.abs(e - d.total_amount) <= 1.01)) d.warnings.push('sum_mismatch');
+      if (!expect.some(e => near(e, d.total_amount, 0.015) || Math.abs(e - d.total_amount) <= 1.01) && !(t.sub && Math.abs(t.sub - itemsSum) <= 1.01 && d.total_amount <= t.sub + 1)) d.warnings.push('sum_mismatch');
     }
     for (const it of items) { if (it._fixed) it.auto_fixed = true; delete it._dot; delete it._ok; delete it._fixed }
     d.text = text;
@@ -932,12 +1008,37 @@ const BillImage = (() => {
     });
     return ver > hor * 1.4 && ver >= 30;
   }
+  // typical letter height in pixels. The reader is most accurate with letters about 26 px tall,
+  // so a photo is scaled by the size of its print, not by its size in pixels.
+  function textSize(img) {
+    const w0 = img.naturalWidth || img.width, h0 = img.naturalHeight || img.height, s = Math.min(1, 1400 / Math.max(w0, h0));
+    const w = Math.max(1, Math.round(w0 * s)), h = Math.max(1, Math.round(h0 * s));
+    if (w < 60 || h < 60) return 0;
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const ctx = c.getContext('2d', { willReadFrequently: true }); ctx.drawImage(img, 0, 0, w, h);
+    const g = gray(ctx, w, h), bg = boxBlur(maxFilter(g, w, h, 6), w, h, 6), ink = new Uint8Array(w * h);
+    for (let i = 0; i < g.length; i++) ink[i] = g[i] / Math.max(1, bg[i]) < 0.6 ? 1 : 0;
+    const seen = new Uint8Array(w * h), hs = [];
+    for (let i = 0; i < w * h; i++) {
+      if (!ink[i] || seen[i]) continue;
+      const st = [i]; seen[i] = 1; let x0 = w, x1 = 0, y0 = h, y1 = 0, n = 0;
+      while (st.length) { const p = st.pop(), x = p % w, y = (p / w) | 0; n++; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; for (const q of [x > 0 ? p - 1 : -1, x < w - 1 ? p + 1 : -1, y > 0 ? p - w : -1, y < h - 1 ? p + w : -1]) if (q >= 0 && ink[q] && !seen[q]) { seen[q] = 1; st.push(q) } }
+      const bw = x1 - x0 + 1, bh = y1 - y0 + 1;
+      if (bh >= 4 && bh <= h * 0.08 && bw <= bh * 6 && n >= bh) hs.push(bh);
+    }
+    if (hs.length < 30) return 0;
+    hs.sort((a, b) => a - b);
+    return hs[Math.floor(hs.length * 0.6)] / s;
+  }
   // img: <img> or <canvas>; rot: quarter turns clockwise chosen by the user
   function prepare(img, rot = 0, opts = {}) {
     const maxSide = opts.maxSide || 2400, turn = ((rot % 4) + 4) % 4;
     const w0 = img.naturalWidth || img.width, h0 = img.naturalHeight || img.height, long = Math.max(w0, h0);
     let s = 1;
-    if (long > maxSide) s = maxSide / long; else if (long < 1300) s = Math.min(2, 1800 / long);
+    const th = opts.textH === undefined ? textSize(img) : opts.textH;
+    if (th > 0) s = Math.min(2.5, Math.max(0.25, 26 / th));
+    else if (long > maxSide) s = maxSide / long; else if (long < 1300) s = Math.min(2, 1800 / long);
+    s = Math.min(s, 3600 / long, Math.sqrt(10e6 / (w0 * h0)));
     const sw0 = Math.round(w0 * s), sh0 = Math.round(h0 * s), w = turn % 2 ? sh0 : sw0, h = turn % 2 ? sw0 : sh0;
     const c = document.createElement('canvas'); c.width = w; c.height = h;
     const ctx = c.getContext('2d', { willReadFrequently: true });
@@ -953,7 +1054,7 @@ const BillImage = (() => {
       const fy = Math.min(bh - 1.001, Math.max(0, y / f - 0.5)), y0 = Math.floor(fy), ty = fy - y0;
       for (let x = 0; x < w; x++) { const fx = Math.min(bw - 1.001, Math.max(0, x / f - 0.5)), x0 = Math.floor(fx), tx = fx - x0, i = y0 * bw + x0; const b = (bg[i] * (1 - tx) + bg[i + 1] * tx) * (1 - ty) + (bg[i + bw] * (1 - tx) + bg[i + bw + 1] * tx) * ty; n[y * w + x] = Math.min(255, g[y * w + x] / Math.max(b, 1) * 255) }
     }
-    const pm = paperMask(g, w, h);
+    const pm = opts.noMask ? null : paperMask(g, w, h);
     if (pm) for (let y = 0; y < h; y++) { const sy = Math.min(pm.sh - 1, (y / pm.f) | 0); for (let x = 0; x < w; x++) if (!pm.keep[sy * pm.sw + Math.min(pm.sw - 1, (x / pm.f) | 0)]) n[y * w + x] = 255 }
     const hist = new Uint32Array(256); for (const v of n) hist[v | 0]++;
     let acc = 0, lo = 0; for (let i = 0; i < 256; i++) { acc += hist[i]; if (acc > n.length * 0.01) { lo = i; break } }
@@ -1041,7 +1142,216 @@ const BillImage = (() => {
     ctx.translate(w / 2, h / 2); ctx.rotate(turn * Math.PI / 2); ctx.drawImage(img, -sw0 / 2, -sh0 / 2, sw0, sh0);
     return new Promise(res => c.toBlob(b => res(b), 'image/jpeg', 0.72));
   }
-  return { prepare, thumbnail, sideways };
+  return { prepare, thumbnail, sideways, textSize };
+})();
+
+/* ===== Bill corners: find the bill in a photo, and flatten it into an upright page ===== */
+const BillCrop = (() => {
+  const FULL = () => [[0, 0], [1, 0], [1, 1], [0, 1]];
+  const quarter = r => ((r % 4) + 4) % 4;
+  // the photo turned by `rot` quarter turns clockwise, at most maxSide pixels on its long side
+  function turned(img, rot = 0, maxSide = 1e9) {
+    const w0 = img.naturalWidth || img.width, h0 = img.naturalHeight || img.height, t = quarter(rot);
+    const s = Math.min(1, maxSide / Math.max(w0, h0)), sw = Math.max(1, Math.round(w0 * s)), sh = Math.max(1, Math.round(h0 * s));
+    const w = t % 2 ? sh : sw, h = t % 2 ? sw : sh, c = document.createElement('canvas'); c.width = w; c.height = h;
+    const ctx = c.getContext('2d', { willReadFrequently: true });
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); ctx.imageSmoothingQuality = 'high';
+    ctx.translate(w / 2, h / 2); ctx.rotate(t * Math.PI / 2); ctx.drawImage(img, -sw / 2, -sh / 2, sw, sh);
+    return c;
+  }
+  // corners in the order top-left, top-right, bottom-right, bottom-left
+  function order(pts) {
+    const cx = pts.reduce((a, p) => a + p[0], 0) / pts.length, cy = pts.reduce((a, p) => a + p[1], 0) / pts.length;
+    const s = pts.slice().sort((a, b) => Math.atan2(a[1] - cy, a[0] - cx) - Math.atan2(b[1] - cy, b[0] - cx));
+    let k = 0; s.forEach((p, i) => { if (p[0] + p[1] < s[k][0] + s[k][1]) k = i });
+    return [...s.slice(k), ...s.slice(0, k)];
+  }
+  // turning the picture a quarter turn (dir +1 = clockwise) moves the corners with it
+  const turnQuad = (q, dir) => order(q.map(([x, y]) => dir > 0 ? [1 - y, x] : [y, 1 - x]));
+  const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const area = q => Math.abs(q.reduce((s, p, i) => { const n = q[(i + 1) % 4]; return s + p[0] * n[1] - n[0] * p[1] }, 0)) / 2;
+  // four corners in order, making a convex shape of a sensible size
+  const valid = (q, min = 0.02) => q.length === 4 && q.every((p, i) => cross(p, q[(i + 1) % 4], q[(i + 2) % 4]) > 1e-4) && area(q) >= min;
+  const isFull = q => q.every((p, i) => Math.abs(p[0] - FULL()[i][0]) < 0.004 && Math.abs(p[1] - FULL()[i][1]) < 0.004);
+
+  function blur(src, w, h, r) {
+    const tmp = new Float32Array(w * h), out = new Float32Array(w * h), n = 2 * r + 1;
+    for (let y = 0; y < h; y++) { const o = y * w; let s = 0; for (let k = -r; k <= r; k++) s += src[o + Math.min(w - 1, Math.max(0, k))]; for (let x = 0; x < w; x++) { tmp[o + x] = s / n; s += src[o + Math.min(w - 1, x + r + 1)] - src[o + Math.max(0, x - r)] } }
+    for (let x = 0; x < w; x++) { let s = 0; for (let k = -r; k <= r; k++) s += tmp[Math.min(h - 1, Math.max(0, k)) * w + x]; for (let y = 0; y < h; y++) { out[y * w + x] = s / n; s += tmp[Math.min(h - 1, y + r + 1) * w + x] - tmp[Math.max(0, y - r) * w + x] } }
+    return out;
+  }
+
+  // Where is the bill? Look for four long straight edges (the paper's border) that enclose
+  // a large area. Small print is blurred away first, so only big edges count. Returns
+  // normalised corners (0..1) of the turned photo, or the whole photo when nothing is clear.
+  function detect(img, rot = 0) {
+    const c = turned(img, rot, 420), w = c.width, h = c.height, N = w * h;
+    if (w < 40 || h < 40) return FULL();
+    const px = c.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, w, h).data;
+    let g = new Float32Array(N);
+    for (let i = 0, j = 0; j < N; i += 4, j++) g[j] = 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
+    g = blur(blur(g, w, h, 1), w, h, 1);
+    // paper: brighter than the Otsu split of the photo and not strongly coloured (wood, cloth, skin)
+    const gh = new Float64Array(256); for (let i = 0; i < N; i++) gh[Math.min(255, g[i] | 0)]++;
+    let tot = 0; for (let i = 0; i < 256; i++) tot += i * gh[i];
+    let wB = 0, sB = 0, bestV = 0, split = 160;
+    for (let t = 0; t < 256; t++) { wB += gh[t]; if (!wB) continue; const wF = N - wB; if (!wF) break; sB += t * gh[t]; const v = wB * wF * (sB / wB - (tot - sB) / wF) ** 2; if (v > bestV) { bestV = v; split = t } }
+    const paper = new Uint8Array(N);
+    for (let i = 0, j = 0; j < N; i += 4, j++) { const mx = Math.max(px[i], px[i + 1], px[i + 2]), mn = Math.min(px[i], px[i + 1], px[i + 2]); paper[j] = g[j] > split && (mx - mn) <= Math.max(28, mx * 0.22) ? 1 : 0 }
+    // along a side: how often is it paper just inside and not paper just outside
+    const edgeContrast = (q, P, Q) => {
+      const cx = q.reduce((a, p) => a + p[0], 0) / 4, cy = q.reduce((a, p) => a + p[1], 0) / 4;
+      let nx = Q[1] - P[1], ny = P[0] - Q[0]; const nl = Math.hypot(nx, ny) || 1; nx /= nl; ny /= nl;
+      const mx = (P[0] + Q[0]) / 2, my = (P[1] + Q[1]) / 2; if ((cx - mx) * nx + (cy - my) * ny < 0) { nx = -nx; ny = -ny } // n points inwards
+      const off = Math.max(3, Math.min(w, h) * 0.02); let n = 0, k = 0;
+      for (let j = 1; j < 16; j++) {
+        const x = P[0] + (Q[0] - P[0]) * j / 16, y = P[1] + (Q[1] - P[1]) * j / 16;
+        const xi = Math.round(x + nx * off), yi = Math.round(y + ny * off), xo = Math.round(x - nx * off), yo = Math.round(y - ny * off);
+        if (xi < 0 || yi < 0 || xi >= w || yi >= h) continue; n++;
+        if (paper[yi * w + xi] && (xo < 0 || yo < 0 || xo >= w || yo >= h || !paper[yo * w + xo])) k++;
+      }
+      return n ? k / n : 0;
+    };
+    // share of the inside of a four-cornered shape that is paper
+    const fill = q => { let n = 0, k = 0; for (let a = 0; a < 16; a++) for (let b = 0; b < 16; b++) { const u = (a + 0.5) / 16, v = (b + 0.5) / 16; const x = (q[0][0] * (1 - u) + q[1][0] * u) * (1 - v) + (q[3][0] * (1 - u) + q[2][0] * u) * v, y = (q[0][1] * (1 - u) + q[1][1] * u) * (1 - v) + (q[3][1] * (1 - u) + q[2][1] * u) * v; const xi = Math.round(x), yi = Math.round(y); if (xi < 0 || yi < 0 || xi >= w || yi >= h) continue; n++; k += paper[yi * w + xi] } return n ? k / n : 0 };
+    const gx = new Float32Array(N), gy = new Float32Array(N), mag = new Float32Array(N);
+    for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) {
+      const i = y * w + x, a = g[i - w - 1], b = g[i - w], cc = g[i - w + 1], d = g[i - 1], f = g[i + 1], p = g[i + w - 1], q = g[i + w], r = g[i + w + 1];
+      const X = cc + 2 * f + r - a - 2 * d - p, Y = p + 2 * q + r - a - 2 * b - cc;
+      gx[i] = X; gy[i] = Y; mag[i] = Math.hypot(X, Y);
+    }
+    // strong edges only: the top few percent, and clearly above flat-paper noise
+    const hist = new Uint32Array(1024); for (let i = 0; i < N; i++) hist[Math.min(1023, mag[i] | 0)]++;
+    let acc = 0, thr = 1023; for (let v = 1023; v >= 0; v--) { acc += hist[v]; if (acc >= N * 0.07) { thr = v; break } }
+    thr = Math.max(thr, 36);
+    // Hough transform; each edge pixel only votes for lines along its own edge direction
+    const NT = 180, diag = Math.ceil(Math.hypot(w, h)), NR = 2 * diag + 1, votes = new Float32Array(NT * NR), cs = [], sn = [];
+    for (let t = 0; t < NT; t++) { cs[t] = Math.cos(t * Math.PI / NT); sn[t] = Math.sin(t * Math.PI / NT) }
+    for (let y = 2; y < h - 2; y++) for (let x = 2; x < w - 2; x++) {
+      const i = y * w + x; if (mag[i] < thr) continue;
+      let th = Math.atan2(gy[i], gx[i]); if (th < 0) th += Math.PI; if (th >= Math.PI) th -= Math.PI;
+      const t0 = Math.round(th / Math.PI * NT), wgt = Math.min(1, mag[i] / (thr * 3));
+      for (let dt = -4; dt <= 4; dt++) { const t = (t0 + dt + NT) % NT; votes[t * NR + Math.round(x * cs[t] + y * sn[t]) + diag] += wgt }
+    }
+    const peaks = [];
+    const minVotes = Math.min(w, h) * 0.12;
+    for (let t = 0; t < NT; t++) for (let r = 0; r < NR; r++) {
+      const v = votes[t * NR + r]; if (v < minVotes) continue;
+      let top = true;
+      for (let dt = -3; dt <= 3 && top; dt++) for (let dr = -5; dr <= 5; dr++) { if (!dt && !dr) continue; const tt = (t + dt + NT) % NT, rr = dt + t < 0 || dt + t >= NT ? 2 * diag - r + dr : r + dr; if (rr < 0 || rr >= NR) continue; const o = votes[tt * NR + rr]; if (o > v || o === v && (dt < 0 || dt === 0 && dr < 0)) { top = false; break } }
+      if (top) peaks.push({ t, r: r - diag, v });
+    }
+    peaks.sort((a, b) => b.v - a.v);
+    const lines = { hor: [], ver: [] };
+    for (const p of peaks) {
+      const ang = p.t * 180 / NT, L = { c: cs[p.t], s: sn[p.t], r: p.r };
+      if (ang > 50 && ang < 130) { if (lines.hor.length < 12) lines.hor.push(L) } else if ((ang < 40 || ang > 140) && lines.ver.length < 12) lines.ver.push(L);
+    }
+    // the photo's own borders, for a bill that runs off the edge of the picture
+    lines.hor.push({ c: 0, s: 1, r: 0, edge: 1 }, { c: 0, s: 1, r: h - 1, edge: 1 });
+    lines.ver.push({ c: 1, s: 0, r: 0, edge: 1 }, { c: 1, s: 0, r: w - 1, edge: 1 });
+    const meet = (a, b) => { const det = a.c * b.s - a.s * b.c; if (Math.abs(det) < 1e-6) return null; return [(a.r * b.s - a.s * b.r) / det, (a.c * b.r - a.r * b.c) / det] };
+    const yAt = (L, x) => (L.r - x * L.c) / L.s, xAt = (L, y) => (L.r - y * L.s) / L.c;
+    // how much of a side really is an edge in the photo: for each candidate line, mark where it
+    // runs along a real edge, then any stretch of it can be measured with one subtraction
+    const T = Math.ceil(Math.hypot(w, h));
+    const prep = L => {
+      if (L.edge || L.pre) return;
+      const x0 = L.c * L.r, y0 = L.s * L.r; L.pre = new Float32Array(2 * T + 2);
+      for (let k = -T; k <= T; k++) {
+        const x = x0 - L.s * k, y = y0 + L.c * k; let ok = 0;
+        if (x >= 1 && y >= 1 && x < w - 1 && y < h - 1) for (let o = -2; o <= 2 && !ok; o++) {
+          const xx = Math.round(x + L.c * o), yy = Math.round(y + L.s * o); if (xx < 1 || yy < 1 || xx >= w - 1 || yy >= h - 1) continue;
+          const i = yy * w + xx; if (mag[i] >= thr * 0.6 && Math.abs(gx[i] * L.c + gy[i] * L.s) >= mag[i] * 0.9) ok = 1;
+        }
+        L.pre[k + T + 1] = L.pre[k + T] + ok;
+      }
+    };
+    const at = (L, P) => Math.max(0, Math.min(2 * T + 1, Math.round((P[0] - L.c * L.r) * -L.s + (P[1] - L.s * L.r) * L.c) + T + 1));
+    const support = (L, P, Q) => { if (L.edge) return 0.38; prep(L); let a = at(L, P), b = at(L, Q); if (a > b) [a, b] = [b, a]; return b > a ? (L.pre[b] - L.pre[a]) / (b - a) : 0 };
+    let best = null;
+    const pad = 0.04;
+    for (let a = 0; a < lines.hor.length; a++) for (let b = 0; b < lines.hor.length; b++) {
+      const Tp = lines.hor[a], B = lines.hor[b]; if (yAt(Tp, w / 2) >= yAt(B, w / 2) - h * 0.18) continue;
+      for (let l = 0; l < lines.ver.length; l++) for (let r = 0; r < lines.ver.length; r++) {
+        const Lf = lines.ver[l], R = lines.ver[r]; if (xAt(Lf, h / 2) >= xAt(R, h / 2) - w * 0.18) continue;
+        const q = [meet(Tp, Lf), meet(Tp, R), meet(B, R), meet(B, Lf)];
+        if (q.some(p => !p || p[0] < -w * pad || p[0] > w * (1 + pad) || p[1] < -h * pad || p[1] > h * (1 + pad))) continue;
+        if (!q.every((p, i) => cross(p, q[(i + 1) % 4], q[(i + 2) % 4]) > 0)) continue;
+        const ar = area(q) / (w * h); if (ar < 0.1) continue;
+        const sides = [support(Tp, q[0], q[1]), support(R, q[1], q[2]), support(B, q[2], q[3]), support(Lf, q[3], q[0])];
+        if (Math.min(...sides) < 0.3) continue;
+        const real = [Tp, R, B, Lf].filter(L => !L.edge).length;
+        if (real < 2) continue;
+        const fit = Math.pow(sides.reduce((p, s) => p * s, 1), 1 / 4);
+        const fl = fill(q); if (fl < 0.72) continue;
+        // a real page border has paper inside and something else outside; an inner box
+        // (a table drawn on the bill) has paper on both sides, so it is not the bill
+        if ([[Tp, q[0], q[1]], [R, q[1], q[2]], [B, q[2], q[3]], [Lf, q[3], q[0]]].filter(([L, P, Q]) => L.edge || edgeContrast(q, P, Q) >= 0.5).length < 2) continue;
+        const cx = q.reduce((a, p) => a + p[0], 0) / 4 / w - 0.5, cy = q.reduce((a, p) => a + p[1], 0) / 4 / h - 0.5;
+        const score = fit * Math.pow(fl, 4) * Math.pow(ar, 0.5) * (1 - 0.6 * Math.hypot(cx, cy));
+        if (!best || score > best.score) best = { score, q, fit, ar, fl };
+      }
+    }
+    if (!best || best.fit < 0.5) return FULL();
+    const out = order(best.q.map(([x, y]) => [Math.min(1, Math.max(0, x / (w - 1))), Math.min(1, Math.max(0, y / (h - 1)))]));
+    return valid(out, 0.08) ? out : FULL();
+  }
+
+  function solve(A, b) { // Gaussian elimination with partial pivoting
+    const n = b.length, M = A.map((row, i) => [...row, b[i]]);
+    for (let c = 0; c < n; c++) {
+      let p = c; for (let r = c + 1; r < n; r++) if (Math.abs(M[r][c]) > Math.abs(M[p][c])) p = r;
+      if (Math.abs(M[p][c]) < 1e-12) return null; [M[c], M[p]] = [M[p], M[c]];
+      for (let r = 0; r < n; r++) if (r !== c) { const f = M[r][c] / M[c][c]; for (let k = c; k <= n; k++) M[r][k] -= f * M[c][k] }
+    }
+    return M.map((row, i) => row[n] / row[i]);
+  }
+  // perspective map from the flat page (u,v) back to the photo (x,y)
+  function homography(photo, page) {
+    const A = [], b = [];
+    for (let k = 0; k < 4; k++) {
+      const [x, y] = photo[k], [u, v] = page[k];
+      A.push([u, v, 1, 0, 0, 0, -u * x, -v * x]); b.push(x);
+      A.push([0, 0, 0, u, v, 1, -u * y, -v * y]); b.push(y);
+    }
+    const H = solve(A, b); return H ? [...H, 1] : null;
+  }
+  // The bill inside `quad` (normalised corners of the photo turned by `rot`), flattened into an
+  // upright rectangle no longer than maxSide pixels. Returns a canvas.
+  function flatten(img, rot = 0, quad = FULL(), maxSide = 3600) {
+    const w0 = img.naturalWidth || img.width, h0 = img.naturalHeight || img.height, long0 = Math.max(w0, h0);
+    if (!quad || !valid(quad, 0.01)) quad = FULL();
+    // size of the flat page, measured along the bill's own edges
+    const tw = rot % 2 ? h0 : w0, th = rot % 2 ? w0 : h0, P0 = quad.map(([x, y]) => [x * tw, y * th]);
+    const len = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+    let pw = Math.max(len(P0[0], P0[1]), len(P0[3], P0[2])), ph = Math.max(len(P0[0], P0[3]), len(P0[1], P0[2]));
+    const k = Math.min(1, maxSide / Math.max(pw, ph));
+    if (isFull(quad)) return turned(img, rot, Math.round(long0 * k));
+    // a smaller copy of the photo is enough when the page will be small
+    const src = turned(img, rot, Math.min(long0, Math.max(800, Math.round(long0 * k * 1.25)))), sw = src.width, sh = src.height;
+    const P = quad.map(([x, y]) => [x * (sw - 1), y * (sh - 1)]), f = sw / tw;
+    const ow = Math.max(8, Math.round(pw * k)), oh = Math.max(8, Math.round(ph * k));
+    const H = homography(P, [[0, 0], [ow - 1, 0], [ow - 1, oh - 1], [0, oh - 1]]);
+    if (!H || !(f > 0)) return turned(img, rot, Math.round(long0 * k));
+    const sd = src.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, sw, sh).data;
+    const out = document.createElement('canvas'); out.width = ow; out.height = oh;
+    const octx = out.getContext('2d', { willReadFrequently: true }), od = octx.createImageData(ow, oh), D = od.data;
+    for (let v = 0; v < oh; v++) {
+      let X = H[1] * v + H[2], Y = H[4] * v + H[5], Z = H[7] * v + 1;
+      for (let u = 0; u < ow; u++, X += H[0], Y += H[3], Z += H[6]) {
+        const x = X / Z, y = Y / Z, o = (v * ow + u) * 4;
+        if (!(x >= 0 && y >= 0 && x <= sw - 1 && y <= sh - 1)) { D[o] = D[o + 1] = D[o + 2] = D[o + 3] = 255; continue }
+        const x0 = x | 0, y0 = y | 0, x1 = Math.min(sw - 1, x0 + 1), y1 = Math.min(sh - 1, y0 + 1), ax = x - x0, ay = y - y0;
+        const i00 = (y0 * sw + x0) * 4, i10 = (y0 * sw + x1) * 4, i01 = (y1 * sw + x0) * 4, i11 = (y1 * sw + x1) * 4;
+        for (let ch = 0; ch < 3; ch++) D[o + ch] = (sd[i00 + ch] * (1 - ax) + sd[i10 + ch] * ax) * (1 - ay) + (sd[i01 + ch] * (1 - ax) + sd[i11 + ch] * ax) * ay;
+        D[o + 3] = 255;
+      }
+    }
+    octx.putImageData(od, 0, 0);
+    return out;
+  }
+  return { FULL, detect, flatten, turned, turnQuad, order, valid, isFull, area };
 })();
 
 const CFG={HOSPITAL_NAME:"RxPx Hospitals",CURRENCY:"₹",EXPIRY_WARNING_DAYS:7,LOW_STOCK_LIMIT:10};
@@ -1164,16 +1474,48 @@ if(S.flow=='newName')return `<div class="flow in"><button class="lnk" data-a="ba
 if(S.flow=='existingName')return `<div class="flow in"><button class="lnk" data-a="backChoose">${ic('chevron-left')}Back</button>${steps(2)}<h1>Existing bill</h1><p class="mu">Choose a saved name to attach this bill to.</p><div class="stack">${names.map(name=>`<button class="card opt ${S.selectedName==name?'on':''}" data-a="selectName" data-name="${esc(name)}"><span class="ib">${ic('user-round')}</span><b>${esc(name)}</b></button>`).join('')}</div>${S.msg?`<p class="err">${esc(S.msg)}</p>`:''}<div class="bar"><div><button class="btn pri" data-a="continueExisting" ${S.selectedName?'':'disabled'}>Continue</button></div></div></div>`;
 return `<div class="flow in"><button class="lnk" data-a="go" data-v="home">${ic('chevron-left')}Back</button>${steps(1)}<h1>Choose a bill</h1><button class="card opt" data-a="newName"><span class="ib">${ic('file-plus-2')}</span><span><b>New bill</b><span class="mu sm" style="display:block">Enter a name and scan a bill</span></span></button><button class="card opt" data-a="chooseExisting" ${names.length?'':'disabled'}><span class="ib">${ic('folder-open')}</span><span><b>Existing bill</b><span class="mu sm" style="display:block">${names.length?'Scan a bill for a saved name':'Available after you save your first bill'}</span></span></button></div>`}
 
-function upload(){const f=S.file,rt=f?.kind=='sheet'?'f5':f?.kind=='pdf'?'f3':touch?'f1':'f4',rot=(f?.rot||0)*90;
+/* ---------- photo editor: turn the photo and put the frame on the bill's corners ---------- */
+const EDIT={img:null,done:null,src:null,view:null,rot:0},CROP={drag:null};
+function editorRelease(){try{EDIT.done&&EDIT.done()}catch{}Object.assign(EDIT,{img:null,done:null,src:null,view:null,rot:0});CROP.drag=null}
+function editorView(f){EDIT.view=BillCrop.turned(EDIT.img,f.rot||0,1400);EDIT.rot=f.rot||0}
+async function prepEditor(f){try{if(EDIT.src!==f.source){editorRelease();const r=await loadImageEl(f.source);if(S.file!==f){r.done();return}Object.assign(EDIT,{img:r.img,done:r.done,src:f.source})}
+await new Promise(r=>setTimeout(r,0));if(S.file!==f)return;f.auto=BillCrop.detect(EDIT.img,f.rot||0);if(!f.quad)f.quad=f.auto.map(p=>p.slice());editorView(f);if(S.view=='upload')render()}
+catch(e){if(S.file===f){editorRelease();S.file=null;S.msg=e.message||'This photo cannot be opened. Choose another photo (JPG or PNG).';render()}}}
+const CORNER=['top left','top right','bottom right','bottom left'],SIDE=['top','right','bottom','left'];
+const qPts=q=>q.map(p=>p[0].toFixed(4)+' '+p[1].toFixed(4)).join(' L');
+const cropShade=q=>`M0 0H1V1H0Z M${qPts(q)}Z`,cropLine=q=>`M${qPts(q)}Z`;
+const sameQuad=(a,b)=>!!a&&!!b&&a.every((p,i)=>Math.abs(p[0]-b[i][0])<.002&&Math.abs(p[1]-b[i][1])<.002);
+function cropper(f){const v=EDIT.view;
+if(!v||EDIT.src!==f.source||EDIT.rot!==(f.rot||0))return `<div class="cropwait" role="status"><span class="spin"></span><span>Getting your photo ready...</span></div>`;
+const q=f.quad||BillCrop.FULL(),found=!!f.auto&&!BillCrop.isFull(f.auto);
+return `<p class="mu sm" id="crophelp">${found?'Drag a dot to fix a corner of the frame.':'Drag the dots onto the corners of the bill.'}</p>
+<div class="crop" id="crop" style="aspect-ratio:${v.width}/${v.height};width:min(100%,calc(40vh*${(v.width/v.height).toFixed(4)}))"><canvas id="cropimg" width="${v.width}" height="${v.height}" role="img" aria-label="Your bill photo"></canvas><svg viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden="true"><path class="cshade" fill-rule="evenodd" d="${cropShade(q)}"/><path class="cline" d="${cropLine(q)}"/></svg>${q.map((p,i)=>`<button class="ch" data-h="${i}" style="left:${p[0]*100}%;top:${p[1]*100}%" aria-label="Move the ${CORNER[i]} corner. Arrow keys move it."></button>`).join('')}${q.map((p,i)=>{const n=q[(i+1)%4];return `<button class="ce ${i%2?'v':'h'}" data-h="${4+i}" style="left:${(p[0]+n[0])*50}%;top:${(p[1]+n[1])*50}%" aria-label="Move the ${SIDE[i]} edge. Arrow keys move it."></button>`}).join('')}<canvas class="loupe" id="loupe" width="128" height="128" hidden></canvas></div>
+<div class="ctools"><button class="btn" data-a="turn" data-d="-1">${ic('rotate-ccw')}Turn left</button><button class="btn" data-a="turn" data-d="1">${ic('rotate-cw')}Turn right</button><button class="btn ${found&&sameQuad(q,f.auto)?'on':''}" data-a="cropFit" id="cfit">${ic('scan')}Fit to bill</button><button class="btn ${BillCrop.isFull(q)?'on':''}" data-a="cropAll" id="call">${ic('maximize')}Whole photo</button></div>`}
+function paintCrop(){const c=$('#cropimg');if(c&&EDIT.view)c.getContext('2d').drawImage(EDIT.view,0,0)}
+// move the handles and the frame without redrawing the screen
+function cropDraw(){const f=S.file,box=$('#crop');if(!f?.quad||!box)return;const q=f.quad;
+box.querySelectorAll('.ch').forEach((h,i)=>{h.style.left=q[i][0]*100+'%';h.style.top=q[i][1]*100+'%'});
+box.querySelectorAll('.ce').forEach((h,i)=>{const p=q[i],n=q[(i+1)%4];h.style.left=(p[0]+n[0])*50+'%';h.style.top=(p[1]+n[1])*50+'%'});
+box.querySelector('.cshade').setAttribute('d',cropShade(q));box.querySelector('.cline').setAttribute('d',cropLine(q));
+const fit=$('#cfit'),all=$('#call');if(fit)fit.classList.toggle('on',!!f.auto&&!BillCrop.isFull(f.auto)&&sameQuad(q,f.auto));if(all)all.classList.toggle('on',BillCrop.isFull(q))}
+// magnified view under the finger, so a corner can be placed exactly
+function cropLoupe(p){const l=$('#loupe'),box=$('#crop'),v=EDIT.view;if(!l||!box||!v)return;const r=box.getBoundingClientRect(),R=19/(r.width/v.width),x=p[0]*v.width,y=p[1]*v.height,ctx=l.getContext('2d');
+l.hidden=false;l.style.left=p[0]>0.5?'8px':'auto';l.style.right=p[0]>0.5?'auto':'8px';
+ctx.fillStyle='#fff';ctx.fillRect(0,0,128,128);ctx.imageSmoothingQuality='high';ctx.drawImage(v,x-R,y-R,2*R,2*R,0,0,128,128);
+ctx.strokeStyle='#F47B20';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(64,42);ctx.lineTo(64,86);ctx.moveTo(42,64);ctx.lineTo(86,64);ctx.stroke()}
+function cropMove(d,dx,dy,quiet){const f=S.file;if(!f?.quad)return;const c=v=>Math.min(1,Math.max(0,v)),q=d.q0.map(p=>p.slice()),ks=d.i<4?[d.i]:[d.i-4,(d.i-3)%4];
+for(const k of ks)q[k]=[c(d.q0[k][0]+dx),c(d.q0[k][1]+dy)];if(!BillCrop.valid(q,0.02))return;f.quad=q;f.touched=1;cropDraw();
+if(!quiet)cropLoupe(ks.length==1?q[ks[0]]:[(q[ks[0]][0]+q[ks[1]][0])/2,(q[ks[0]][1]+q[ks[1]][1])/2])}
+function upload(){const f=S.file,rt=f?.kind=='sheet'?'f5':f?.kind=='pdf'?'f3':touch?'f1':'f4';
 const pick=touch?`<div class="stack"><label class="card tile" for="f1"><span class="ib">${ic('camera')}</span><b>Take Photo</b></label><label class="card tile" for="f2"><span class="ib">${ic('image')}</span><b>Choose from Gallery</b></label><label class="card tile" for="f3"><span class="ib">${ic('file-text')}</span><b>Upload PDF</b></label><label class="card tile" for="f5"><span class="ib">${ic('file-spreadsheet')}</span><b>Upload Excel or CSV</b></label></div><p class="note">Tip: lay the bill flat in good light and fill the screen with the whole bill.</p>`:`<label class="drop" id="drop" for="f4">${ic('upload')}<b>Choose a bill image, PDF, Excel, or CSV</b><div class="mu sm">Up to 25 MB</div></label>`;
 return `<div class="flow in"><button class="lnk" data-a="backName">${ic('chevron-left')}Back</button>${steps(3)}<h1>Add your bill</h1><div class="card" style="margin:16px 0"><div class="mu sm">Name on bill</div><b>${esc(S.partyName)}</b></div>
 <input id="f1" type="file" accept="image/*" capture="environment" hidden><input id="f2" type="file" accept="image/*" hidden><input id="f3" type="file" accept="application/pdf,.pdf" hidden><input id="f4" type="file" accept="image/*,application/pdf,.pdf,.xlsx,.xls,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden><input id="f5" type="file" accept=".xlsx,.xls,.csv,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
-${f?`<div class="card stack">${f.kind=='image'?`<div class="prevbox"><img class="prev" src="${f.url}" alt="Your bill" style="transform:rotate(${rot}deg)${rot%180?' scale(.72)':''}"></div><p class="mu sm" style="margin:0">Is the bill upright? If not, tap Rotate.</p><div class="g2"><button class="btn" data-a="rotate">${ic('rotate-cw')}Rotate</button><label class="btn" for="${rt}">${ic('refresh-cw')}Retake</label></div><button class="btn" data-a="rmfile">${ic('trash-2')}Remove</button>`:`<div class="sp" style="justify-content:flex-start">${ic('file-text')}<b>${esc(f.name)}</b></div><div class="g2"><label class="btn" for="${rt}">${ic('refresh-cw')}Change</label><button class="btn" data-a="rmfile">${ic('trash-2')}Remove</button></div>`}</div>`:pick}
+${f?`<div class="card stack">${f.kind=='image'?`${cropper(f)}<div class="g2"><label class="btn" for="${rt}">${ic('refresh-cw')}Retake</label><button class="btn" data-a="rmfile">${ic('trash-2')}Remove</button></div>`:`<div class="sp" style="justify-content:flex-start">${ic('file-text')}<b>${esc(f.name)}</b></div><div class="g2"><label class="btn" for="${rt}">${ic('refresh-cw')}Change</label><button class="btn" data-a="rmfile">${ic('trash-2')}Remove</button></div>`}</div>`:pick}
 ${S.msg?`<p class="err">${esc(S.msg)}</p>`:''}<div class="bar"><div><button class="btn pri" data-a="submit" ${f?'':'disabled'}>Submit</button></div></div></div>`}
 
 const PSTEPS=['Opening your bill','Reading the text','Finding the details','Saving'];
 function proc(){return `<div class="flow stack in" style="padding-top:64px;text-align:center"><h1>${S.bad?(S.dup?'Already saved':'We could not read this bill'):'Reading your bill'}</h1><div class="card stack" style="text-align:left" id="psteps">${PSTEPS.map((l,j)=>{const c=j<S.step?'done':j==S.step?(S.bad?'bad':'act'):'';return `<div class="ps ${c}"><span class="d">${c=='done'?ic('check'):c=='bad'?ic('x'):''}</span><span class="${c?'':'mu'}">${l}</span></div>`}).join('')}</div>
-<p id="ocrStatus" class="${S.bad?'err':'mu sm'}">${esc(S.ocrMessage||'This takes a few seconds.')}</p>${S.bad?`<div class="stack">${S.dup?`<button class="btn pri" data-a="open" data-id="${S.dup}">${ic('file-search')}Open the saved bill</button>`:`<button class="btn pri" data-a="submit">Try again</button><button class="btn" data-a="manual">${ic('pencil')}Type the details myself</button>`}<button class="btn" data-a="chooseAgain">Choose another file</button><button class="btn" data-a="go" data-v="home">Go to dashboard</button></div>`:''}</div>`}
+<p id="ocrStatus" class="${S.bad?'err':'mu sm'}">${esc(S.ocrMessage||'This takes a few seconds.')}</p>${S.bad?`<div class="stack">${S.dup?`<button class="btn pri" data-a="open" data-id="${S.dup}">${ic('file-search')}Open the saved bill</button>`:S.file?.kind=='image'&&EDIT.src===S.file.source?`<button class="btn pri" data-a="reframe">${ic('crop')}Fix the frame</button>`:`<button class="btn pri" data-a="submit">Try again</button><button class="btn" data-a="manual">${ic('pencil')}Type the details myself</button>`}<button class="btn" data-a="chooseAgain">Choose another file</button><button class="btn" data-a="go" data-v="home">Go to dashboard</button></div>`:''}</div>`}
 function setStep(n){S.step=n;const box=$('#psteps');if(!box)return;box.querySelectorAll('.ps').forEach((el,j)=>{el.className='ps '+(j<n?'done':j==n?'act':'');el.querySelector('.d').innerHTML=j<n?ic('check'):'';el.lastElementChild.className=j<=n?'':'mu'});window.lucide&&lucide.createIcons()}
 
 function kind(){const d=S.draft;return `<div class="flow in"><h1>What kind of bill is this?</h1><p class="mu">The bill was read (${d.items.length} ${d.items.length==1?'item':'items'}, total ${inr(billAmount(d))}), but its type is not clear. Choose one so the right numbers are updated.</p>${TKEYS.map(k=>`<button class="card opt ${S.type==k?'on':''}" data-a="pickType" data-t="${k}"><span class="ib">${ic(TYPES[k].i)}</span><span><b>${TYPES[k].q}</b><span class="mu sm" style="display:block">${TYPES[k].money=='expense'?'Adds to expenses':'Adds to revenue'}${TYPES[k].med?(k=='medicine_purchase'?', adds stock':', reduces stock'):''}</span></span></button>`).join('')}<div class="bar"><div class="g2"><button class="btn" data-a="cancelKind">Cancel</button><button class="btn pri" data-a="saveKind" ${TYPES[S.type]?'':'disabled'}>Save bill</button></div></div></div>`}
@@ -1235,7 +1577,7 @@ const cols=Object.keys(rows[0]),csv=[cols,...rows.map(r=>cols.map(c=>r[c]??''))]
 
 let lastV='';
 function render(){clearDashboardCharts();const V={login,home,new:chooser,upload,proc,kind,detail,edit:editView,meds,reports,profile};if(!S.user)S.view='login';if(!V[S.view])S.view='home';
-const app=$('#app');app.innerHTML=V[S.view]();if(lastV!=S.view){(app.querySelector('.flow,.main')||app).classList.add('in');lastV=S.view}window.lucide&&lucide.createIcons();if(S.view=='home')drawDashboardCharts();if(S.view=='detail')loadOriginal();saveFlow()}
+const app=$('#app');app.innerHTML=V[S.view]();if(lastV!=S.view){(app.querySelector('.flow,.main')||app).classList.add('in');lastV=S.view}window.lucide&&lucide.createIcons();if(S.view=='home')drawDashboardCharts();if(S.view=='detail')loadOriginal();if(S.view=='upload')paintCrop();saveFlow()}
 
 /* ---------- reading bills ---------- */
 function withTimeout(promise,ms,message,onTimeout){let timer;return Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>{onTimeout&&onTimeout();reject(new Error(message))},ms)})]).finally(()=>clearTimeout(timer))}
@@ -1254,9 +1596,20 @@ const w=await withTimeout(ocrReady(),150000,'The bill reader took too long to lo
 const r=await withTimeout(w.recognize(canvas),150000,'Reading took too long. Try a clearer photo taken closer to the bill.',resetReader);
 return{conf:r.data.confidence||0,text:r.data.text||'',lines:(r.data.lines||[]).map(l=>({toks:(l.words||[]).map(wd=>({t:wd.text,x0:wd.bbox.x0,x1:wd.bbox.x1,y0:wd.bbox.y0,y1:wd.bbox.y1,c:wd.confidence}))}))}}
 const loadImageEl=file=>new Promise((res,rej)=>{const u=URL.createObjectURL(file),i=new Image();i.onload=()=>res({img:i,done:()=>URL.revokeObjectURL(u)});i.onerror=()=>{URL.revokeObjectURL(u);rej(new Error('This photo cannot be opened. Choose another photo (JPG or PNG).'))};i.src=u});
-async function readImage(file,rot,id){const{img,done}=await loadImageEl(file);try{setReadProgress('Cleaning up the photo...',1);await new Promise(r=>setTimeout(r,30));
-let best=null;const side=(rot%2==0)&&BillImage.sideways(img),order=side?[1,3,0]:[0,1,3,2];for(const extra of order){if(S.run!=id)throw new Error('cancelled');const canvas=BillImage.prepare(img,rot+extra);const r=await ocrCanvas(canvas,extra?'Turning the photo and reading again...':'Reading your bill...');const d=BillParser.parse({source:'ocr',lines:r.lines},parseCtx());const score=d.items.length*2+(d.total_amount!==''&&!d.warnings.includes('total_calculated')?4:0)+(d.bill_date?2:0)+(d.bill_number?2:0)+r.conf/10;if(!best||score>best.score)best={score,r,d,rot:rot+extra};const realTotal=d.total_amount!==''&&!d.warnings.includes('total_calculated');if(d.items.length&&realTotal&&(d.bill_date||d.bill_number)||r.conf>=70&&(d.bill_date||d.bill_number||d.items.length))break}
-S.file.rot=((best.rot%4)+4)%4;return best}finally{done()}}
+// the bill as the person framed it in the photo editor: turned, cropped to its corners and flattened
+async function framedPhoto(f){const{img,done}=await loadImageEl(f.source);try{return BillCrop.flatten(img,f.rot||0,f.quad||BillCrop.FULL(),3600)}finally{done()}}
+// read the framed photo. A frame found automatically can be wrong (two papers overlapping), so when
+// it reads poorly and the person did not set it, the whole photo is read too and the better one kept.
+async function readFramed(f,id){const framed=!BillCrop.isFull(f.quad||BillCrop.FULL());let flat=await framedPhoto(f);if(S.run!=id)throw new Error('cancelled');let best=await readPhoto(flat,id,{manual:!!f.touched,framed});
+const weak=b=>b.r.conf<60||!b.d.items.length||b.d.total_amount===''||b.d.warnings.includes('total_calculated');
+if(framed&&!f.touched&&weak(best)){const whole=await framedPhoto({...f,quad:BillCrop.FULL()});if(S.run!=id)throw new Error('cancelled');const other=await readPhoto(whole,id,{framed:false});if(other.score>best.score){best=other;flat=whole}}
+return{best,flat}}
+// read a framed photo; other quarter turns are tried only when the text does not read
+async function readPhoto(src,id,opts={}){setReadProgress('Cleaning up the photo...',1);await new Promise(r=>setTimeout(r,30));
+const th=BillImage.textSize(src);let best=null;const side=!opts.manual&&BillImage.sideways(src),order=opts.manual?[0,2,1,3]:side?[1,3,0,2]:[0,1,3,2];
+for(const extra of order){if(S.run!=id)throw new Error('cancelled');const canvas=BillImage.prepare(src,extra,{textH:th,noMask:!!opts.framed});const r=await ocrCanvas(canvas,extra?'Turning the photo and reading again...':'Reading your bill...');const d=BillParser.parse({source:'ocr',lines:r.lines},parseCtx());const realTotal=d.total_amount!==''&&!d.warnings.includes('total_calculated');const fits=realTotal&&d.items.length&&!d.warnings.includes('sum_mismatch')&&!d.warnings.includes('items_missing');const score=Math.min(d.items.length,15)*2+(realTotal?4:0)+(fits?5:0)+(d.bill_date?2:0)+(d.bill_number?2:0)+r.conf/5;if(!best||score>best.score)best={score,r,d,rot:extra};
+if(d.items.length&&realTotal&&(d.bill_date||d.bill_number)||r.conf>=70&&(d.bill_date||d.bill_number||d.items.length)||opts.manual&&r.conf>=50&&(d.items.length||realTotal))break}
+return best}
 function groupLines(toks){toks.sort((a,b)=>a.y0-b.y0||a.x0-b.x0);const lines=[];for(const t of toks){const h=Math.max(1,t.y1-t.y0),cy=(t.y0+t.y1)/2,l=lines.find(l=>Math.abs(l.cy-cy)<=Math.max(h,l.h)*0.5);if(l){l.toks.push(t)}else lines.push({cy,h,toks:[t]})}lines.sort((a,b)=>a.cy-b.cy);return lines.map(l=>({toks:l.toks.sort((a,b)=>a.x0-b.x0)}))}
 async function readPdf(file,id){if(!window.pdfjsLib)throw new Error('PDF reading is unavailable. Check your internet connection or upload photos of the pages instead.');pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 const task=pdfjsLib.getDocument({data:new Uint8Array(await file.arrayBuffer()),isEvalSupported:false});try{
@@ -1282,14 +1635,15 @@ return S.bills.find(b=>{if(hash&&b.file?.hash===hash)return true;const bn=normNo
 if(no&&bn&&no==bn)return sameTot||(bp==p&&(!d.bill_date||!b.bill_date||b.bill_date==d.bill_date));
 return !no&&d.bill_date&&b.bill_date==d.bill_date&&sameTot&&bp==p&&b.items.length==d.items.length})}
 function looksLikeBill(d){const realTotal=d.total_amount!==''&&!d.warnings.includes('total_calculated');return d.items.length>0&&!!(d.bill_date||d.bill_number||realTotal)||realTotal&&!!(d.bill_number||d.bill_date)}
+const UNCLEAR='This photo is not clear enough to read. Tap Fix the frame and put the dots on the corners of the bill, or take the photo again from straight above in good light.';
 async function startRead(){const id=S.run=uid();S.step=0;S.bad=0;S.dup=null;S.ocrMessage='Opening your bill...';S.view='proc';render();
 try{const f=S.file;if(!f?.kind||!f.source)throw new Error('Choose a photo, PDF, Excel, or CSV file to continue.');
 f.hash=f.hash||await fileHash(f.source);let d;
-if(f.kind=='image'){const best=await readImage(f.source,f.rot||0,id);d=best.d;d.read={source:'photo',conf:Math.round(best.r.conf)}}
+if(f.kind=='image'){setReadProgress('Cleaning up the photo...',1);await new Promise(r=>setTimeout(r,30));const{best,flat}=await readFramed(f,id);d=best.d;if(best.r.conf<45&&!(d.items.length&&d.total_amount!==''&&!d.warnings.includes('total_calculated')&&!d.warnings.includes('sum_mismatch')))throw new Error(UNCLEAR);f.flat={canvas:flat,rot:best.rot};d.read={source:'photo',conf:Math.round(best.r.conf)}}
 else if(f.kind=='pdf'){const doc=await readPdf(f.source,id);setReadProgress('Finding the details...',2);d=BillParser.parse(doc,parseCtx());d.read={source:doc.source=='pdf'?'pdf':'scanned pdf'}}
 else{setReadProgress('Reading spreadsheet rows...',1);const doc=await readSheet(f.source);setReadProgress('Finding the details...',2);d=BillParser.parse(doc,parseCtx());d.read={source:'spreadsheet'}}
 if(S.run!=id)return;setReadProgress('Finding the details...',2);
-if(!looksLikeBill(d))throw new Error(f.kind=='sheet'?'Could not find bill items in this spreadsheet. Use a sheet with column headings such as Item, Qty and Amount.':'Could not find bill details in this file. Take a clear photo of the whole bill (flat, good light) or choose another file.');
+if(!looksLikeBill(d))throw new Error(f.kind=='sheet'?'Could not find bill items in this spreadsheet. Use a sheet with column headings such as Item, Qty and Amount.':f.kind=='image'?'Could not find the bill details in this photo. Tap Fix the frame and check the orange frame is on the corners of the bill, or take the photo again flat and in good light.':'Could not find bill details in this file. Choose another copy of the bill.');
 const dup=findDuplicate(d,f.hash,S.partyName);if(dup){S.run=0;S.bad=1;S.dup=dup.id;S.step=2;S.ocrMessage=`This bill is already saved${dup.bill_number?' (bill no. '+dup.bill_number+')':''}. It was not added again.`;return render()}
 S.draft=d;S.type=d.type;
 if(!d.type_sure){S.run=0;S.view='kind';return render()}
@@ -1328,12 +1682,12 @@ async function saveTyped(e,items,total){const d={bill_number:String(e.bill_numbe
 const b={id:uid(),type:e.type,bill_number:d.bill_number,bill_date:d.bill_date,party,ref:'',mode:String(e.mode||'').trim(),total:r2(total),tax:+parseNumber(e.tax)||0,disc:+parseNumber(e.disc)||0,items,file:S.file?{name:S.file.name,type:S.file.type,kind:S.file.kind,hash:S.file.hash||'',rot:S.file.rot||0,url:'',stored:false}:null,by:S.user.name,at:new Date().toISOString(),warnings:[],read:{source:'typed'}};
 const oldBills=S.bills.slice(),oldMeds=S.meds.map(m=>({...m})),oldImpact=S.lastUpload,mv=stock(b);b.stock_movements=mv.movements;S.bills.unshift(b);S.lastUpload={id:b.id,bill_number:b.bill_number,type:b.type,impact:impactOf(b,mv),shortage:shortageOf(b,mv),warnings:[]};
 S.busy=1;const ok=await persist();S.busy=0;if(!ok){S.bills=oldBills;S.meds=oldMeds;S.lastUpload=oldImpact;S.msg='Could not save this bill in browser storage. Free some space and try again.';return render()}
-const src=S.file?.source;if(S.file?.url)URL.revokeObjectURL(S.file.url);keepOriginal(b,src);S.file=null;S.edit=null;S.draft=null;S.partyName='';S.flow='choose';go('home');toast(`Bill saved: ${inr(b.total)} ${TYPES[b.type].money}`)}
+const src=S.file?.source,flat=S.file?.flat;if(S.file?.url)URL.revokeObjectURL(S.file.url);keepOriginal(b,src,flat);editorRelease();S.file=null;S.edit=null;S.draft=null;S.partyName='';S.flow='choose';go('home');toast(`Bill saved: ${inr(b.total)} ${TYPES[b.type].money}`)}
 const restoreBill=(b,old,file)=>{for(const k of Object.keys(b))if(!(k in old))delete b[k];Object.assign(b,old,{file})};
 const cleanItem=i=>{const n=v=>{const x=parseNumber(v);return x===''?'':x};return{description:String(i.description||'').trim(),batch_no:normBatch(i.batch_no),manufacture_date:okDate(i.manufacture_date)?i.manufacture_date:'',expiry_date:okDate(i.expiry_date)?i.expiry_date:'',quantity:n(i.quantity),free:n(i.free),pack:i.pack||'',pack_n:+i.pack_n||'',mrp:n(i.mrp),rate:n(i.rate),disc:n(i.disc),gst:n(i.gst),amount:n(i.amount)}};
 function impactOf(b,mv){const T=TYPES[b.type],parts=[`${T?(T.money=='expense'?'Added to expenses':'Added to revenue'):'Saved (no type)'}: ${inr(b.total)}`];if(mv.added)parts.push(`Stock added: ${+mv.added.toFixed(2)} units of ${new Set(mv.movements.map(m=>m.lot)).size} medicines`);if(mv.removed)parts.push(`Stock reduced: ${+mv.removed.toFixed(2)} packs`);return parts.join(' · ')}
 function shortageOf(b,mv){return mv.shortage.length?mv.shortage.map(x=>`${x.name}: ${+x.quantity.toFixed(2)} was not in stock`).join('; '):TYPES[b.type]?.med&&!mv.added&&!mv.removed?'No medicine quantities were found, so stock was not changed.':''}
-async function keepOriginal(b,src){try{if(!src||!b.file)return;let blob=null;if(b.file.kind=='image'){const{img,done}=await loadImageEl(src);try{blob=await BillImage.thumbnail(img,b.file.rot||0)}finally{done()}}else if(src.size<=8*1024*1024)blob=src;if(!blob)return;await IDB.put(b.id,blob);if(!S.bills.some(x=>x.id==b.id)){IDB.del(b.id).catch(()=>{});return}b.file.stored=true;persist();if(S.view=='detail'&&S.detail==b.id)loadOriginal()}catch{}}
+async function keepOriginal(b,src,flat){try{if(!src||!b.file)return;let blob=null;if(b.file.kind=='image'){if(flat?.canvas)blob=await BillImage.thumbnail(flat.canvas,flat.rot||0,2000);else{const{img,done}=await loadImageEl(src);try{blob=await BillImage.thumbnail(img,b.file.rot||0)}finally{done()}}}else if(src.size<=8*1024*1024)blob=src;if(!blob)return;await IDB.put(b.id,blob);if(!S.bills.some(x=>x.id==b.id)){IDB.del(b.id).catch(()=>{});return}b.file.stored=true;persist();if(S.view=='detail'&&S.detail==b.id)loadOriginal()}catch{}}
 async function loadOriginal(){const b=S.bills.find(x=>x.id==S.detail);if(!b?.file?.stored||S.img[b.id])return;try{const blob=await IDB.get(b.id);if(!blob)return;for(const k in S.img){URL.revokeObjectURL(S.img[k]);delete S.img[k]}S.img[b.id]=URL.createObjectURL(blob);if(S.view=='detail'&&S.detail==b.id)render()}catch{}}
 
 const A={
@@ -1346,15 +1700,18 @@ else{if(!acc)return S.msg='No account with this email on this device. Tap Create
 catch{return S.msg='Could not check the password in this browser. Try again.',render()}finally{S.busy=0}
 S.user={name:acc.name,email:acc.email,admin:true};try{localStorage.setItem(SESSION_KEY,JSON.stringify(S.user))}catch{}S.auth={name:'',email:'',pw:'',pw2:''};S.flow='choose';S.view=savedNames().length?'home':'new';S.msg='';render()},
 go(d){if(d.v=='new'){S.view='new';S.flow='choose';S.msg='';return render()}go(d.v)},
-newbill(){S.type='general';S.flow='choose';S.partyName='';S.selectedName='';if(S.file?.url)URL.revokeObjectURL(S.file.url);S.file=null;go('new')},
+newbill(){S.type='general';S.flow='choose';S.partyName='';S.selectedName='';if(S.file?.url)URL.revokeObjectURL(S.file.url);editorRelease();S.file=null;go('new')},
 backChoose(){S.flow='choose';S.msg='';render()},
-backName(){if(S.file?.url)URL.revokeObjectURL(S.file.url);S.file=null;go('new')},
+backName(){if(S.file?.url)URL.revokeObjectURL(S.file.url);editorRelease();S.file=null;go('new')},
 newName(){S.flow='newName';S.partyName='';S.msg='';render();warmReader();const i=$('#partyName');i&&i.focus()},
 chooseExisting(){S.flow='existingName';S.selectedName='';S.msg='';render();warmReader()},selectName(d){S.selectedName=d.name;render()},
 continueName(){if(!S.partyName.trim())return S.msg='Enter a name to continue.',render();S.type='general';go('upload')},
 continueExisting(){if(!savedNames().includes(S.selectedName))return S.msg='Choose a saved name to continue.',render();S.partyName=S.selectedName;S.type='general';go('upload')},
-rotate(){if(S.file){S.file.rot=((S.file.rot||0)+1)%4;render()}},
-rmfile(){if(S.file?.url)URL.revokeObjectURL(S.file.url);S.file=null;render()},chooseAgain(){if(S.file?.url)URL.revokeObjectURL(S.file.url);S.file=null;S.run=0;S.bad=0;S.dup=null;go('upload')},submit(){startRead()},
+turn(d){const f=S.file;if(f?.kind!='image'||!EDIT.img||EDIT.src!==f.source)return;const dir=+d.d>0?1:-1;f.rot=(((f.rot||0)+dir)%4+4)%4;f.quad=BillCrop.turnQuad(f.quad||BillCrop.FULL(),dir);if(f.auto)f.auto=BillCrop.turnQuad(f.auto,dir);f.touched=1;editorView(f);render()},
+cropFit(){const f=S.file;if(f?.kind!='image'||!EDIT.img||EDIT.src!==f.source)return;if(!f.auto)f.auto=BillCrop.detect(EDIT.img,f.rot||0);if(BillCrop.isFull(f.auto))return toast('The bill edges are not clear. Drag the dots onto its corners.');f.quad=f.auto.map(p=>p.slice());render()},
+cropAll(){const f=S.file;if(f?.kind!='image')return;f.quad=BillCrop.FULL();f.touched=1;render()},
+reframe(){S.run=0;S.bad=0;S.dup=null;S.msg='';go('upload')},
+rmfile(){if(S.file?.url)URL.revokeObjectURL(S.file.url);editorRelease();S.file=null;render()},chooseAgain(){if(S.file?.url)URL.revokeObjectURL(S.file.url);editorRelease();S.file=null;S.run=0;S.bad=0;S.dup=null;go('upload')},submit(){startRead()},
 pickType(d){S.type=d.t;render()},cancelKind(){S.draft=null;go('upload')},saveKind(){if(!TYPES[S.type])return;A.save()},
 async save(){const d=S.draft,T=TYPES[S.type];if(!d)return go('home');const party=S.partyName.trim();
 const hasAmount=parseNumber(d.total_amount)!==''||d.items.some(i=>parseNumber(i.amount)!=='');const total=billAmount(d);
@@ -1363,7 +1720,7 @@ const b={id:uid(),type:T?S.type:'general',bill_number:String(d.bill_number||'').
 const oldBills=S.bills.slice(),oldMeds=S.meds.map(m=>({...m})),oldImpact=S.lastUpload,mv=stock(b);b.stock_movements=mv.movements;
 S.bills.unshift(b);S.lastUpload={id:b.id,bill_number:b.bill_number,type:b.type,impact:impactOf(b,mv),shortage:shortageOf(b,mv),warnings:b.warnings};
 S.busy=1;const ok=await persist();S.busy=0;if(!ok){S.bills=oldBills;S.meds=oldMeds;S.lastUpload=oldImpact;S.run=0;S.bad=1;S.view='proc';S.step=3;S.ocrMessage='Could not save this bill in browser storage. Free some space and try again.';return render()}
-const src=b.file?.source;if(b.file){delete b.file.source;if(b.file.url)URL.revokeObjectURL(b.file.url);b.file.url=''}keepOriginal(b,src);
+const src=b.file?.source,flat=S.file?.flat;if(b.file){delete b.file.source;if(b.file.url)URL.revokeObjectURL(b.file.url);b.file.url=''}keepOriginal(b,src,flat);editorRelease();
 S.file=null;S.draft=null;S.partyName='';S.flow='choose';go('home');toast(`Bill saved: ${inr(b.total)} ${T?.money=='revenue'?'revenue':'expense'}`)},
 open(d){S.detail=d.id;S.msg='';go('detail')},ask(){S.ask=1;S.msg='';render()},noask(){S.ask=0;S.msg='';render()},
 async del(){const bill=S.bills.find(b=>b.id==S.detail);if(!bill)return go('home');const oldBills=S.bills.slice(),oldMeds=S.meds.map(m=>({...m})),oldImpact=S.lastUpload,issue=reverseStock(bill);if(issue){S.meds=oldMeds;S.msg=issue;return render()}S.bills=S.bills.filter(b=>b.id!=S.detail);if(S.lastUpload?.id==bill.id)S.lastUpload=null;S.busy=1;const ok=await persist();S.busy=0;if(!ok){S.bills=oldBills;S.meds=oldMeds;S.lastUpload=oldImpact;S.msg='Could not save the deletion. Free space and try again.';return render()}IDB.del(bill.id).catch(()=>{});if(S.img[bill.id]){URL.revokeObjectURL(S.img[bill.id]);delete S.img[bill.id]}go('home');toast('Bill deleted and stock updated')},
@@ -1393,7 +1750,13 @@ document.addEventListener('keydown',e=>{if(e.key=='Enter'&&e.target.id=='partyNa
 document.addEventListener('change',e=>{const el=e.target;if(el.tagName=='SELECT')return;if(el.type!='file'||!el.files[0])return;const fl=el.files[0];
 const kind=fileKind(fl);if(!kind){S.msg='Please choose a bill photo, PDF, Excel workbook, or CSV file.';return render()}
 if(fl.size>(kind=='image'?25:20)*1024*1024){S.msg=`That file is larger than ${kind=='image'?25:20} MB. Please choose a smaller one.`;return render()}
-if(S.file?.url)URL.revokeObjectURL(S.file.url);S.msg='';S.file={name:fl.name,type:fl.type,kind,rot:0,url:kind=='image'?URL.createObjectURL(fl):'',source:fl};render();warmReader()});
+if(S.file?.url)URL.revokeObjectURL(S.file.url);S.msg='';el.value='';S.file={name:fl.name,type:fl.type,kind,rot:0,url:'',source:fl,quad:null,auto:null,touched:0};if(kind!='image')editorRelease();render();if(kind=='image')prepEditor(S.file);warmReader()});
+// dragging a corner or an edge of the frame
+document.addEventListener('pointerdown',e=>{const h=e.target.closest&&e.target.closest('#crop [data-h]');if(!h||!S.file?.quad||S.busy)return;e.preventDefault();const box=$('#crop').getBoundingClientRect();CROP.drag={i:+h.dataset.h,box,x:e.clientX,y:e.clientY,q0:S.file.quad.map(p=>p.slice()),el:h};try{h.setPointerCapture(e.pointerId)}catch{}h.classList.add('on');h.focus({preventScroll:true});cropMove(CROP.drag,0,0)});
+document.addEventListener('pointermove',e=>{const d=CROP.drag;if(!d)return;e.preventDefault();cropMove(d,(e.clientX-d.x)/d.box.width,(e.clientY-d.y)/d.box.height)});
+const cropEnd=()=>{const d=CROP.drag;if(!d)return;CROP.drag=null;d.el.classList.remove('on');const l=$('#loupe');if(l)l.hidden=true};
+document.addEventListener('pointerup',cropEnd);document.addEventListener('pointercancel',cropEnd);
+document.addEventListener('keydown',e=>{const h=e.target.closest&&e.target.closest('#crop [data-h]');if(!h||!S.file?.quad)return;const k={ArrowLeft:[-1,0],ArrowRight:[1,0],ArrowUp:[0,-1],ArrowDown:[0,1]}[e.key];if(!k)return;e.preventDefault();const step=e.shiftKey?0.02:0.004;cropMove({i:+h.dataset.h,q0:S.file.quad.map(p=>p.slice())},k[0]*step,k[1]*step,true)});
 document.addEventListener('dragover',e=>{if(e.target.closest('#drop')){e.preventDefault();$('#drop').classList.add('over')}});
 document.addEventListener('dragleave',e=>{if($('#drop'))$('#drop').classList.remove('over')});
 document.addEventListener('drop',e=>{if(!e.target.closest('#drop'))return;e.preventDefault();const fl=e.dataTransfer.files[0];if(fl){const t=new DataTransfer();t.items.add(fl);$('#f4').files=t.files;$('#f4').dispatchEvent(new Event('change',{bubbles:true}))}});
