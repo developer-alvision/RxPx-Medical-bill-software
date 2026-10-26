@@ -416,7 +416,7 @@ const BillParser = (() => {
   const FOOTER = /\b(?:taxable\s*(?:value|amount|amt)|sub\s*-?\s*total|grand\s*total|net\s*payable|total\s*qty|total\s*quantity|total\s*items|no\.?\s*of\s*items|amount\s*in\s*words|round\s*off|total\s*gst|total\s*tax|e\s*&\s*o\.?\s*e)\b|\bitems?\s*:\s*\d|^\W*[il1|\[]?tems?\s*:\s*\d/i;
   // print around the items that is never an item: licence and tax numbers, contact and bank
   // details, terms, greetings and signatures
-  const JUNK = /\b(?:gstin|gst\s*(?:no|reg)|d\.?\s*l\.?\s*no|drug\s*lic\w*|fssai|cin\s*:|ph(?:one)?\s*(?:no\.?)?\s*:|mob(?:ile)?\s*(?:no\.?)?\s*:|cell\s*:|tel\s*:|e-?mail|www\.|a\s*\/\s*c\s*no|account\s*no|ifsc|bank\s*:|terms|conditions|goods\s*once|once\s*sold|taken\s*back|jurisdiction|signature|signatory|authori[sz]ed|thank\s*you|visit\s*again|get\s*well|wishing|lab\s*timings?|timings\s*:|pharmacist|declaration|we\s*declare|you\s*saved|check\s*expiry|balance\s*:)\b|@\S+\.\w/i;
+  const JUNK = /\b(?:gstin|gst\s*(?:no|reg)|d\.?\s*l\.?\s*no|drug\s*lic\w*|fssai|cin\s*:|ph(?:one)?\s*(?:no\.?)?\s*:|mob(?:ile)?\s*(?:no\.?)?\s*:|cell\s*:|tel\s*:|e-?mail|www\.|a\s*\/\s*c\s*no|account\s*no|ifsc|bank\s*:|terms|conditions|goods\s*once|once\s*sold|taken\s*back|jurisdiction|signature|signatory|authori[sz]ed|thank\s*you|visit\s*again|get\s*well|wishing|lab\s*timings?|timings\s*:|pharmacist|declaration|we\s*declare|you\s*saved|check\s*expiry|balance\s*:)\b|\b[\w.+-]+@[a-z0-9-]+\.[a-z]{2,}\b/i;
   // a total or discount label with one letter misread ("ross Amount", "Jiscount", "Net Arnount")
   const NEAR_SUM = ['subtotal', 'grossamount', 'grosstotal', 'grandtotal', 'netamount', 'netpayable', 'nettotal', 'discount', 'roundoff', 'totalqty', 'totalamount', 'billamount', 'amountpayable', 'taxableamount', 'taxablevalue', 'yousaved'];
   function nearSummary(text) {
@@ -444,6 +444,7 @@ const BillParser = (() => {
   const NAME_BIT = /^(?:tabs?|tablets?|caps?|capsules?|syp|syr|syrup|susp|suspension|inj|injection|drops?|cream|gel|oint|ointment|lotion|sachet|powder|soln|solution|spray|inhaler|respules?|vial|amp|ampoule|kit)\.?$|^(?:\d{1,4}(?:\.\d+)?(?:mg|mcg|ml|iu|%)|\d{1,3}(?:\.\d+)?(?:g|gm))(?:\/\d{0,4}(?:\.\d+)?(?:ml|g|gm))?$/i;
   const looksBatch = t => /^[A-Z0-9][A-Z0-9\-\/]{2,14}$/i.test(t) && digits(t) >= 2 && letters(t) >= 1 && !/^(?:tab|cap|inj|syp)/i.test(t) && !/^\d{1,2}[\/\-]\d{2,4}$/.test(t);
 
+  const UNIT_WORD = /^(?:ml|mg|mcg|gm?|kg|l|ltrs?|litres?|iu|cm|mm|%|x)\.?$/i;
   function cellText(cells, k) { return (cells[k] || []).map(t => t.t).join(' ').trim() }
 
   function buildItem(cells, cols) {
@@ -465,7 +466,7 @@ const BillParser = (() => {
     it.pack = cellText(cells, 'pack');
     // name: tidy, take inline batch/expiry/pack if the bill has no column for them
     let words = desc.split(/\s+/).filter(Boolean);
-    if (!cols.has('sno') && words.length > 1 && /^\d{1,3}[.)]?$/.test(words[0])) words.shift();
+    if (!cols.has('sno') && words.length > 1 && /^\d{1,3}[.)]?$/.test(words[0]) && !UNIT_WORD.test(words[1])) words.shift();
     const keep = [];
     for (const w of words) {
       const exp = /^(?:exp|e)[:.]?(.+)$/i.exec(w), bt = /^(?:b|batch|bno)[:.](.+)$/i.exec(w);
@@ -528,18 +529,28 @@ const BillParser = (() => {
     const targets = [t.sub, t.total !== '' ? t.total - (+t.tax || 0) + (+t.disc || 0) : '', t.total !== '' ? t.total + (+t.disc || 0) : '', t.total, t.words, t.words ? t.words - (+t.tax || 0) + (+t.disc || 0) : ''].filter(v => v !== '' && v !== undefined && v > 0);
     const hits = () => targets.some(v => Math.abs(v - sum()) <= 1.01);
     if (!targets.length || hits()) return;
+    const fitsRow = it => { const q = +it.quantity, a = +it.amount; if (!(q > 0 && a > 0) || it._derived) return false; const d = 1 - (+it.disc || 0) / 100, g = 1 + (+it.gst || 0) / 100; return [it.rate, it.mrp].some(p => p !== '' && +p > 0 && [q * p * d, q * p * d * g, q * p].some(e => Math.abs(e - a) <= Math.max(0.6, a * 0.012))) };
     // 1) an amount that lost its decimal point
     for (const it of items) {
       if (it._dot && !it._dot.amount && +it.amount >= 100) {
-        const old = it.amount; it.amount = round2(old / 100);
-        if (hits()) { if (it.rate !== '' && !it._dot.rate && +it.rate >= 100 && +it.quantity && near(+it.quantity * it.rate / 100, it.amount, 0.03)) it.rate = round2(it.rate / 100); if (it.mrp !== '' && !it._dot.mrp && +it.mrp >= 100 && it.rate !== '' && it.mrp / 100 >= it.rate * 0.98) it.mrp = round2(it.mrp / 100); it._fixed = true; return }
-        it.amount = old;
+        const was = fitsRow(it), old = [it.amount, it.rate, it.mrp]; it.amount = round2(old[0] / 100);
+        if (hits()) {
+          if (it.rate !== '' && !it._dot.rate && +it.rate >= 100 && +it.quantity && near(+it.quantity * it.rate / 100, it.amount, 0.03)) it.rate = round2(it.rate / 100);
+          if (it.mrp !== '' && !it._dot.mrp && +it.mrp >= 100 && it.rate !== '' && it.mrp / 100 >= it.rate * 0.98) it.mrp = round2(it.mrp / 100);
+          if (!was || fitsRow(it)) { it._fixed = true; return }
+        }
+        [it.amount, it.rate, it.mrp] = old;
       }
     }
     // 1b) two or three amounts that lost their decimal points (small, blurry photos)
     const cand = items.filter(it => it._dot && !it._dot.amount && +it.amount >= 100);
     if (cand.length >= 2 && cand.length <= 10) {
-      const tryFix = set => { const old = set.map(it => it.amount); set.forEach(it => { it.amount = round2(+it.amount / 100) }); if (hits()) { set.forEach(it => { it._fixed = true }); return true } set.forEach((it, k) => { it.amount = old[k] }); return false };
+      const tryFix = set => {
+        const old = set.map(it => [it.amount, it.rate, fitsRow(it)]);
+        set.forEach(it => { it.amount = round2(+it.amount / 100); if (it.rate !== '' && !it._dot.rate && +it.rate >= 100 && +it.quantity && near(+it.quantity * it.rate / 100, it.amount, 0.03)) it.rate = round2(it.rate / 100) });
+        if (hits() && set.every((it, k) => !old[k][2] || fitsRow(it))) { set.forEach(it => { it._fixed = true }); return true }
+        set.forEach((it, k) => { it.amount = old[k][0]; it.rate = old[k][1] }); return false;
+      };
       for (let a = 0; a < cand.length; a++) for (let b = a + 1; b < cand.length; b++) { if (tryFix([cand[a], cand[b]])) return; for (let c = b + 1; c < cand.length; c++) if (tryFix([cand[a], cand[b], cand[c]])) return }
     }
     // 2) rows that are not items (an address or a footer line read as an item): keep the unbroken run
@@ -548,9 +559,10 @@ const BillParser = (() => {
       const amt = items.map(i => +i.amount || 0), n = amt.length, pre = [0];
       for (const a of amt) pre.push(round2(pre[pre.length - 1] + a));
       const hit = v => targets.some(t => Math.abs(t - v) <= 1.01);
+      const onlyLoose = (a, b, skip) => items.every((it, i) => (i >= a && i < b && i !== skip) || !fitsRow(it));
       let keep = null;
-      for (let len = n - 1; len >= Math.max(1, Math.ceil(n * 0.5)) && !keep; len--) for (let a = 0; a + len <= n && !keep; a++) if (hit(pre[a + len] - pre[a])) keep = { a, b: a + len, skip: -1 };
-      for (let len = n; len >= Math.max(2, Math.ceil(n * 0.5)) && !keep; len--) for (let a = 0; a + len <= n && !keep; a++) for (let k = a; k < a + len && !keep; k++) if (hit(pre[a + len] - pre[a] - amt[k])) keep = { a, b: a + len, skip: k };
+      for (let len = n - 1; len >= Math.max(1, Math.ceil(n * 0.5)) && !keep; len--) for (let a = 0; a + len <= n && !keep; a++) if (hit(pre[a + len] - pre[a]) && onlyLoose(a, a + len, -1)) keep = { a, b: a + len, skip: -1 };
+      for (let len = n; len >= Math.max(2, Math.ceil(n * 0.5)) && !keep; len--) for (let a = 0; a + len <= n && !keep; a++) for (let k = a; k < a + len && !keep; k++) if (hit(pre[a + len] - pre[a] - amt[k]) && onlyLoose(a, a + len, k)) keep = { a, b: a + len, skip: k };
       if (keep) { const kept = items.filter((_, i) => i >= keep.a && i < keep.b && i !== keep.skip); items.splice(0, items.length, ...kept); return }
     }
     // 3) one row whose maths does not add up: give it the difference
@@ -670,7 +682,7 @@ const BillParser = (() => {
       let j = toks.length;
       while (j > 0 && (money(toks[j - 1]) || isPct(toks[j - 1])) && !(letters(toks[j - 1]) > 1)) j--;
       const nums = toks.slice(j).filter(t => !isPct(t)).map(t => money(t)).filter(Boolean);
-      const name = toks.slice(0, j).join(' ').replace(/^\d{1,3}[.)]?\s+/, '').replace(/^\d{4,8}\s+(?=[A-Za-z])/, '').trim();
+      const name = toks.slice(0, j).join(' ').replace(/^\d{1,3}[.)]?\s+(?!\s*(?:ml|mg|mcg|gm?|kg|l|ltrs?|litres?|iu|cm|mm|%|x)\b)/i, '').replace(/^\d{6,8}\s+(?=[A-Za-z])/, '').trim();
       if (!nums.length || letters(name) < 3) continue;
       const last = nums[nums.length - 1];
       if (!last.dot && last.v >= 1e6 || !(last.v > 0)) continue;
@@ -682,10 +694,10 @@ const BillParser = (() => {
         else if (near(nums[0].v * nums[1].v, last.v, 0.02)) { it.quantity = nums[0].v; it.rate = nums[1].v }
       } else if (nums.length === 2) {
         const [a] = nums;
-        if (!a.dot && a.v >= 1 && a.v <= 1000 && last.v / a.v >= 1) { it.quantity = a.v; it.rate = round2(last.v / a.v) }
+        if (!a.dot && a.v >= 1 && a.v <= 1000 && last.v / a.v >= 1) { it.quantity = a.v; it.rate = round2(last.v / a.v); it._derived = true }
         else if (near(a.v, last.v)) it.rate = a.v;
       }
-      if (!it.rate) it.rate = round2(it.amount / (it.quantity || 1));
+      if (!it.rate) { it.rate = round2(it.amount / (it.quantity || 1)); it._derived = true }
       items.push(it);
     }
     return items;
@@ -762,7 +774,7 @@ const BillParser = (() => {
     return '';
   }
   // "Total: 1,950.00", "Grand Total (Incl GST) Rs 7430" give their amount; "Total WBC Count 7800" does not
-  const LABEL_WORD = /^(?:amount|amt|value|payable|rs|inr|in|rupees|bill|net|incl|including|inclusive|excl|exclusive|gst|tax|taxes|of|all|after|round|rounded|off|total|grand|due|now|to|be|paid|cash|upi|card)$/i;
+  const LABEL_WORD = /^(?:amount|amt|value|payable|receivable|received|rs|inr|in|rupees|bill|net|final|the|incl|including|inclusive|excl|exclusive|gst|tax|taxes|of|all|after|before|less|discount|disc|round|rounded|roundoff|off|total|grand|due|now|to|be|paid|cash|upi|card)$/i;
   function labelMoney(text, idx) {
     const toks = text.slice(idx).split(/\s+/).filter(Boolean);
     for (let i = 0; i < toks.length; i++) {
@@ -794,14 +806,15 @@ const BillParser = (() => {
     for (let i = from; i < lines.length; i++) { const m = lines[i].text.match(/\b(?:sub\s*-?\s*total|gross\s*(?:amount|amt|total|value)|taxable\s*(?:amount|value))\b/i); if (m) { const v = firstMoneyAfter(lines[i].text, m.index + m[0].length); if (v !== '') sub = v } }
     let tax = 0, taxSeen = false;
     for (let i = from; i < lines.length; i++) {
-      const t = lines[i].text;
+      const t = lines[i].text.replace(/\([^)]*\)/g, ' ');
       if (!isSummary(t) && !/\b[csi]\s*gst\b/i.test(t)) continue;
+      if (/^\W*(?:grand\s*total|net\s*(?:amount|amt|payable|total|value)|total(?!\s*(?:tax|gst|cgst|sgst|igst|vat))|bill\s*amount|amount\s*payable|invoice\s*(?:total|amount|value))\b/i.test(t)) continue;
       const re = /\b([csiu]\s*gst|gst|vat|tax\s*amount|total\s*tax)\b/ig;
       let m;
       while ((m = re.exec(t))) { const v = firstMoneyAfter(t, m.index + m[0].length); if (v !== '' && v < 1e7) { tax += v; taxSeen = true } }
     }
     let disc = '';
-    for (let i = from; i < lines.length; i++) { const t = lines[i].text.replace(/\([^)]*\)/g, ' '), m = t.match(/\b(?:less\s*:?\s*)?(?:discount|disc\s*amt|cash\s*discount)\b/i); if (m && isSummary(t)) { const v = firstMoneyAfter(t, m.index + m[0].length); if (v !== '') disc = v } }
+    for (let i = from; i < lines.length; i++) { const t = lines[i].text.replace(/\([^)]*\)/g, ' '), m = t.match(/\b(?:less\s*:?\s*)?(?:discount|disc\s*amt|cash\s*discount)\b/i); if (m && isSummary(t) && !/\b(?:after|before|incl\.?|including|excl\.?|excluding|with|without|post|pre)\s*$/i.test(t.slice(0, m.index))) { const v = firstMoneyAfter(t, m.index + m[0].length); if (v !== '') disc = v } }
     let roff = 0;
     for (let i = from; i < lines.length; i++) { const t = lines[i].text, m = t.match(/\bround(?:ed)?\s*(?:off|of)\b|\br\s*\/\s*o\b/i); if (m) { const v = firstMoneyAfter(t, m.index + m[0].length); if (v !== '' && Math.abs(v) < 1) roff = v } }
     return { total, sub, tax: taxSeen ? round2(tax) : '', disc, roff };
@@ -916,7 +929,7 @@ const BillParser = (() => {
       const expect = [itemsSum, itemsSum + (+t.tax || 0), itemsSum - (+t.disc || 0), itemsSum + (+t.tax || 0) - (+t.disc || 0), t.sub || 0, (t.sub || 0) + (+t.tax || 0) - (+t.disc || 0)];
       if (!expect.some(e => near(e, d.total_amount, 0.015) || Math.abs(e - d.total_amount) <= 1.01) && !(t.sub && Math.abs(t.sub - itemsSum) <= 1.01 && d.total_amount <= t.sub + 1)) d.warnings.push('sum_mismatch');
     }
-    for (const it of items) { if (it._fixed) it.auto_fixed = true; delete it._dot; delete it._ok; delete it._fixed }
+    for (const it of items) { if (it._fixed) it.auto_fixed = true; delete it._dot; delete it._ok; delete it._fixed; delete it._derived }
     d.text = text;
     return d;
   }
@@ -1329,7 +1342,7 @@ const BillCrop = (() => {
     const k = Math.min(1, maxSide / Math.max(pw, ph));
     if (isFull(quad)) return turned(img, rot, Math.round(long0 * k));
     // a smaller copy of the photo is enough when the page will be small
-    const src = turned(img, rot, Math.min(long0, Math.max(800, Math.round(long0 * k * 1.25)))), sw = src.width, sh = src.height;
+    const src = turned(img, rot, Math.min(long0, 4000, Math.max(800, Math.round(long0 * k * 1.25)))), sw = src.width, sh = src.height;
     const P = quad.map(([x, y]) => [x * (sw - 1), y * (sh - 1)]), f = sw / tw;
     const ow = Math.max(8, Math.round(pw * k)), oh = Math.max(8, Math.round(ph * k));
     const H = homography(P, [[0, 0], [ow - 1, 0], [ow - 1, oh - 1], [0, oh - 1]]);
@@ -1348,6 +1361,7 @@ const BillCrop = (() => {
         D[o + 3] = 255;
       }
     }
+    src.width = src.height = 0;
     octx.putImageData(od, 0, 0);
     return out;
   }
@@ -1451,7 +1465,7 @@ ${S.bills.length?'':`<section class="card dempty"><span class="ib">${ic('file-pl
 <section class="hero"><div class="hero-sun">${HERO_SUN}</div><div class="hero-m">${month} so far</div><div class="hero-net num${neg?' neg':''}">${neg?'−':''}${inr0(Math.abs(net))}</div><div class="hero-cap">${neg?'more went out than came in':'left after expenses'}</div>
 <div class="hero-split" role="img" aria-label="Came in ${inr(inn)}, went out ${inr(out)}">${inn>0?`<i class="seg-in" style="flex:${inn}"></i>`:''}${out>0?`<i class="seg-out" style="flex:${out}"></i>`:''}</div>
 <div class="hero-io"><div><span><i class="k k-in"></i>Came in</span><b class="num">${inr0(inn)}</b></div><div><span><i class="k k-out"></i>Went out</span><b class="num">${inr0(out)}</b></div></div></section>
-${S.bills.length?`<section class="tiles">${tile('receipt-indian-rupee',mb.length,mb.length==1?'Bill this month':'Bills this month','data-a="repgo" data-r="all"')}${tile('pill',inStock,inStock==1?'Medicine in stock':'Medicines in stock','data-a="go" data-v="meds"')}${tile('calendar-clock',expiring.length,'Expiring or expired',`data-a="medgo" data-f="${expiring.some(m=>st(m)=='soon')?'soon':'exp'}"`,'red')}${tile('file-warning',check.length,check.length==1?'Bill to check':'Bills to check',check.length?`data-a="open" data-id="${check[0].id}"`:'data-a="repgo" data-r="all"','amber')}</section>`:''}
+${S.bills.length?`<section class="tiles">${tile('receipt-indian-rupee',mb.length,mb.length==1?'Bill this month':'Bills this month','data-a="repgo" data-r="all"')}${tile('pill',inStock,inStock==1?'Medicine in stock':'Medicines in stock','data-a="go" data-v="meds"')}${tile('calendar-clock',expiring.length,'Expiring or expired','data-a="medgo" data-f="due"','red')}${tile('file-warning',check.length,check.length==1?'Bill to check':'Bills to check',check.length?`data-a="open" data-id="${check[0].id}"`:'data-a="repgo" data-r="all"','amber')}</section>`:''}
 ${S.bills.length?`<div class="dgrid"><section class="card dcard"><div class="sp"><b>Last 6 months</b><span class="keys"><span><i class="k k-in"></i>Came in</span><span><i class="k k-out"></i>Went out</span></span></div><div class="dplot"><canvas id="cashflowChart" aria-label="Money that came in and went out in the last six months"></canvas></div></section>
 <section class="card dcard"><b>${month}</b>${split('Came in',REV_T,inn,'No money in yet this month')}${split('Went out',EXP_T,out,'No expenses yet this month')}</section></div>
 <section class="card recent"><div class="rh"><b>Latest bills</b><button class="lnk" data-a="repgo" data-r="all">See all bills</button></div>${S.bills.slice(0,4).map(billLine).join('')}</section>`:''}`)}
@@ -1478,9 +1492,9 @@ return `<div class="flow in"><button class="lnk" data-a="go" data-v="home">${ic(
 const EDIT={img:null,done:null,src:null,view:null,rot:0},CROP={drag:null};
 function editorRelease(){try{EDIT.done&&EDIT.done()}catch{}Object.assign(EDIT,{img:null,done:null,src:null,view:null,rot:0});CROP.drag=null}
 function editorView(f){EDIT.view=BillCrop.turned(EDIT.img,f.rot||0,1400);EDIT.rot=f.rot||0}
-async function prepEditor(f){try{if(EDIT.src!==f.source){editorRelease();const r=await loadImageEl(f.source);if(S.file!==f){r.done();return}Object.assign(EDIT,{img:r.img,done:r.done,src:f.source})}
+async function prepEditor(f){if(EDIT.loading===f.source)return;EDIT.loading=f.source;try{if(EDIT.src!==f.source){editorRelease();const r=await loadImageEl(f.source);if(S.file!==f){r.done();return}Object.assign(EDIT,{img:r.img,done:r.done,src:f.source})}
 await new Promise(r=>setTimeout(r,0));if(S.file!==f)return;f.auto=BillCrop.detect(EDIT.img,f.rot||0);if(!f.quad)f.quad=f.auto.map(p=>p.slice());editorView(f);if(S.view=='upload')render()}
-catch(e){if(S.file===f){editorRelease();S.file=null;S.msg=e.message||'This photo cannot be opened. Choose another photo (JPG or PNG).';render()}}}
+catch(e){if(S.file===f){editorRelease();S.file=null;S.msg=e.message||'This photo cannot be opened. Choose another photo (JPG or PNG).';render()}}finally{if(EDIT.loading===f.source)EDIT.loading=null}}
 const CORNER=['top left','top right','bottom right','bottom left'],SIDE=['top','right','bottom','left'];
 const qPts=q=>q.map(p=>p[0].toFixed(4)+' '+p[1].toFixed(4)).join(' L');
 const cropShade=q=>`M0 0H1V1H0Z M${qPts(q)}Z`,cropLine=q=>`M${qPts(q)}Z`;
@@ -1489,7 +1503,7 @@ function cropper(f){const v=EDIT.view;
 if(!v||EDIT.src!==f.source||EDIT.rot!==(f.rot||0))return `<div class="cropwait" role="status"><span class="spin"></span><span>Getting your photo ready...</span></div>`;
 const q=f.quad||BillCrop.FULL(),found=!!f.auto&&!BillCrop.isFull(f.auto);
 return `<p class="mu sm" id="crophelp">${found?'Drag a dot to fix a corner of the frame.':'Drag the dots onto the corners of the bill.'}</p>
-<div class="crop" id="crop" style="aspect-ratio:${v.width}/${v.height};width:min(100%,calc(40vh*${(v.width/v.height).toFixed(4)}))"><canvas id="cropimg" width="${v.width}" height="${v.height}" role="img" aria-label="Your bill photo"></canvas><svg viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden="true"><path class="cshade" fill-rule="evenodd" d="${cropShade(q)}"/><path class="cline" d="${cropLine(q)}"/></svg>${q.map((p,i)=>`<button class="ch" data-h="${i}" style="left:${p[0]*100}%;top:${p[1]*100}%" aria-label="Move the ${CORNER[i]} corner. Arrow keys move it."></button>`).join('')}${q.map((p,i)=>{const n=q[(i+1)%4];return `<button class="ce ${i%2?'v':'h'}" data-h="${4+i}" style="left:${(p[0]+n[0])*50}%;top:${(p[1]+n[1])*50}%" aria-label="Move the ${SIDE[i]} edge. Arrow keys move it."></button>`}).join('')}<canvas class="loupe" id="loupe" width="128" height="128" hidden></canvas></div>
+<div class="crop" id="crop" style="aspect-ratio:${v.width}/${v.height};width:min(100%,calc(${v.height>v.width*1.4?58:40}vh*${(v.width/v.height).toFixed(4)}))"><canvas id="cropimg" width="${v.width}" height="${v.height}" role="img" aria-label="Your bill photo"></canvas><svg viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden="true"><path class="cshade" fill-rule="evenodd" d="${cropShade(q)}"/><path class="cline" d="${cropLine(q)}"/></svg>${q.map((p,i)=>`<button class="ch" data-h="${i}" style="left:${p[0]*100}%;top:${p[1]*100}%" aria-label="Move the ${CORNER[i]} corner. Arrow keys move it."></button>`).join('')}${q.map((p,i)=>{const n=q[(i+1)%4];return `<button class="ce ${i%2?'v':'h'}" data-h="${4+i}" style="left:${(p[0]+n[0])*50}%;top:${(p[1]+n[1])*50}%" aria-label="Move the ${SIDE[i]} edge. Arrow keys move it."></button>`}).join('')}<canvas class="loupe" id="loupe" width="128" height="128" hidden></canvas></div>
 <div class="ctools"><button class="btn" data-a="turn" data-d="-1">${ic('rotate-ccw')}Turn left</button><button class="btn" data-a="turn" data-d="1">${ic('rotate-cw')}Turn right</button><button class="btn ${found&&sameQuad(q,f.auto)?'on':''}" data-a="cropFit" id="cfit">${ic('scan')}Fit to bill</button><button class="btn ${BillCrop.isFull(q)?'on':''}" data-a="cropAll" id="call">${ic('maximize')}Whole photo</button></div>`}
 function paintCrop(){const c=$('#cropimg');if(c&&EDIT.view)c.getContext('2d').drawImage(EDIT.view,0,0)}
 // move the handles and the frame without redrawing the screen
@@ -1504,7 +1518,7 @@ l.hidden=false;l.style.left=p[0]>0.5?'8px':'auto';l.style.right=p[0]>0.5?'auto':
 ctx.fillStyle='#fff';ctx.fillRect(0,0,128,128);ctx.imageSmoothingQuality='high';ctx.drawImage(v,x-R,y-R,2*R,2*R,0,0,128,128);
 ctx.strokeStyle='#F47B20';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(64,42);ctx.lineTo(64,86);ctx.moveTo(42,64);ctx.lineTo(86,64);ctx.stroke()}
 function cropMove(d,dx,dy,quiet){const f=S.file;if(!f?.quad)return;const c=v=>Math.min(1,Math.max(0,v)),q=d.q0.map(p=>p.slice()),ks=d.i<4?[d.i]:[d.i-4,(d.i-3)%4];
-for(const k of ks)q[k]=[c(d.q0[k][0]+dx),c(d.q0[k][1]+dy)];if(!BillCrop.valid(q,0.02))return;f.quad=q;f.touched=1;cropDraw();
+for(const k of ks)q[k]=[c(d.q0[k][0]+dx),c(d.q0[k][1]+dy)];if(!BillCrop.valid(q,0.02))return;if(!sameQuad(q,f.quad))f.touched=1;f.quad=q;cropDraw();
 if(!quiet)cropLoupe(ks.length==1?q[ks[0]]:[(q[ks[0]][0]+q[ks[1]][0])/2,(q[ks[0]][1]+q[ks[1]][1])/2])}
 function upload(){const f=S.file,rt=f?.kind=='sheet'?'f5':f?.kind=='pdf'?'f3':touch?'f1':'f4';
 const pick=touch?`<div class="stack"><label class="card tile" for="f1"><span class="ib">${ic('camera')}</span><b>Take Photo</b></label><label class="card tile" for="f2"><span class="ib">${ic('image')}</span><b>Choose from Gallery</b></label><label class="card tile" for="f3"><span class="ib">${ic('file-text')}</span><b>Upload PDF</b></label><label class="card tile" for="f5"><span class="ib">${ic('file-spreadsheet')}</span><b>Upload Excel or CSV</b></label></div><p class="note">Tip: lay the bill flat in good light and fill the screen with the whole bill.</p>`:`<label class="drop" id="drop" for="f4">${ic('upload')}<b>Choose a bill image, PDF, Excel, or CSV</b><div class="mu sm">Up to 25 MB</div></label>`;
@@ -1515,7 +1529,7 @@ ${S.msg?`<p class="err">${esc(S.msg)}</p>`:''}<div class="bar"><div><button clas
 
 const PSTEPS=['Opening your bill','Reading the text','Finding the details','Saving'];
 function proc(){return `<div class="flow stack in" style="padding-top:64px;text-align:center"><h1>${S.bad?(S.dup?'Already saved':'We could not read this bill'):'Reading your bill'}</h1><div class="card stack" style="text-align:left" id="psteps">${PSTEPS.map((l,j)=>{const c=j<S.step?'done':j==S.step?(S.bad?'bad':'act'):'';return `<div class="ps ${c}"><span class="d">${c=='done'?ic('check'):c=='bad'?ic('x'):''}</span><span class="${c?'':'mu'}">${l}</span></div>`}).join('')}</div>
-<p id="ocrStatus" class="${S.bad?'err':'mu sm'}">${esc(S.ocrMessage||'This takes a few seconds.')}</p>${S.bad?`<div class="stack">${S.dup?`<button class="btn pri" data-a="open" data-id="${S.dup}">${ic('file-search')}Open the saved bill</button>`:S.file?.kind=='image'&&EDIT.src===S.file.source?`<button class="btn pri" data-a="reframe">${ic('crop')}Fix the frame</button>`:`<button class="btn pri" data-a="submit">Try again</button><button class="btn" data-a="manual">${ic('pencil')}Type the details myself</button>`}<button class="btn" data-a="chooseAgain">Choose another file</button><button class="btn" data-a="go" data-v="home">Go to dashboard</button></div>`:''}</div>`}
+<p id="ocrStatus" class="${S.bad?'err':'mu sm'}">${esc(S.ocrMessage||'This takes a few seconds.')}</p>${S.bad?`<div class="stack">${S.dup?`<button class="btn pri" data-a="open" data-id="${S.dup}">${ic('file-search')}Open the saved bill</button>`:S.file?.kind=='image'?`<button class="btn pri" data-a="reframe">${ic('crop')}Fix the frame</button>`:`<button class="btn pri" data-a="submit">Try again</button><button class="btn" data-a="manual">${ic('pencil')}Type the details myself</button>`}<button class="btn" data-a="chooseAgain">Choose another file</button><button class="btn" data-a="go" data-v="home">Go to dashboard</button></div>`:''}</div>`}
 function setStep(n){S.step=n;const box=$('#psteps');if(!box)return;box.querySelectorAll('.ps').forEach((el,j)=>{el.className='ps '+(j<n?'done':j==n?'act':'');el.querySelector('.d').innerHTML=j<n?ic('check'):'';el.lastElementChild.className=j<=n?'':'mu'});window.lucide&&lucide.createIcons()}
 
 function kind(){const d=S.draft;return `<div class="flow in"><h1>What kind of bill is this?</h1><p class="mu">The bill was read (${d.items.length} ${d.items.length==1?'item':'items'}, total ${inr(billAmount(d))}), but its type is not clear. Choose one so the right numbers are updated.</p>${TKEYS.map(k=>`<button class="card opt ${S.type==k?'on':''}" data-a="pickType" data-t="${k}"><span class="ib">${ic(TYPES[k].i)}</span><span><b>${TYPES[k].q}</b><span class="mu sm" style="display:block">${TYPES[k].money=='expense'?'Adds to expenses':'Adds to revenue'}${TYPES[k].med?(k=='medicine_purchase'?', adds stock':', reduces stock'):''}</span></span></button>`).join('')}<div class="bar"><div class="g2"><button class="btn" data-a="cancelKind">Cancel</button><button class="btn pri" data-a="saveKind" ${TYPES[S.type]?'':'disabled'}>Save bill</button></div></div></div>`}
@@ -1541,10 +1555,10 @@ ${x('party','Name on bill')}${x('bill_number','Bill number')}${x('bill_date','Bi
 <div class="bar"><div class="g2"><button class="btn" data-a="cancelEdit">Cancel</button><button class="btn pri" data-a="saveEdit">Save changes</button></div></div></div>`}
 
 const medCard=m=>`<div class="card stack" style="margin-top:8px"><div class="sp" style="align-items:flex-start"><b>${esc(m.name)}</b><span>${badge(m)}</span></div><dl class="dl"><dt>Batch no</dt><dd>${esc(m.batch||'Not set')}</dd><dt>Quantity</dt><dd class="num">${esc(fmtQty(m))}${+m.pack_n>1?` <span class="mu sm">(packs of ${m.pack_n})</span>`:''}</dd><dt>Manufactured</dt><dd>${fd(m.manufacture_date)}</dd><dt>Expiry</dt><dd>${fd(m.expiry)}</dd><dt>Supplier</dt><dd>${esc(m.supplier||'Not set')}</dd></dl></div>`;
-function medList(){const q=S.f.mq.toLowerCase(),L=S.meds.filter(m=>(!q||(m.name+' '+m.batch).toLowerCase().includes(q))&&(S.mf=='all'||(S.mf=='soon'&&st(m)=='soon')||(S.mf=='exp'&&st(m)=='exp')||(S.mf=='low'&&m.qty<=CFG.LOW_STOCK_LIMIT))).sort(byExp);
+function medList(){const q=S.f.mq.toLowerCase(),L=S.meds.filter(m=>(!q||(m.name+' '+m.batch).toLowerCase().includes(q))&&(S.mf=='all'||(S.mf=='soon'&&st(m)=='soon')||(S.mf=='exp'&&st(m)=='exp')||(S.mf=='low'&&m.qty<=CFG.LOW_STOCK_LIMIT)||(S.mf=='due'&&st(m)!='good'&&(+m.qty||0)>0))).sort(byExp);
 return L.length?L.map(medCard).join(''):`<div class="card mu" style="text-align:center;padding:32px 20px;margin-top:8px">${S.meds.length?'No medicines match. Try a different search or filter.':'No medicines yet. Upload a medicine purchase bill to start tracking stock.'}</div>`}
 const meds=()=>shell('meds',`<div class="sp"><h1>Medicines</h1>${S.user.admin?`<button class="btn" style="width:auto" data-a="addmed">${ic('plus')}Add</button>`:''}</div><label class="fl" style="position:relative"><span class="mu sm">Search by name or batch</span><input class="inp" data-k="f.mq" value="${esc(S.f.mq)}" type="search"></label>
-<div class="chips">${[['all','All'],['soon','Expiring soon'],['exp','Expired'],['low','Low stock']].map(c=>`<button class="chip ${S.mf==c[0]?'on':''}" data-a="mf" data-f="${c[0]}">${c[1]}</button>`).join('')}</div><div id="ml">${medList()}</div>${S.sheet?medSheet():''}`);
+<div class="chips">${[...(S.mf=='due'?[['due','Expiring or expired']]:[]),['all','All'],['soon','Expiring soon'],['exp','Expired'],['low','Low stock']].map(c=>`<button class="chip ${S.mf==c[0]?'on':''}" data-a="mf" data-f="${c[0]}">${c[1]}</button>`).join('')}</div><div id="ml">${medList()}</div>${S.sheet?medSheet():''}`);
 const medSheet=()=>{const f=S.mform,x=(k,l,t)=>`<label class="fl">${l}<input class="inp" data-k="mform.${k}" value="${esc(f[k])}" type="${t||'text'}" ${t=='number'?'inputmode="decimal"':''}></label>`;return `<div class="sheet"><div class="stack"><h1>Add medicine</h1>${x('name','Medicine name')}${x('batch','Batch no')}${x('qty','Quantity','number')}${x('manufacture_date','Manufacturing date','date')}${x('expiry','Expiry date','date')}${x('supplier','Supplier')}${S.msg?`<p class="err">${esc(S.msg)}</p>`:''}<div class="g2"><button class="btn" data-a="closemed">Cancel</button><button class="btn pri" data-a="savemed">Add medicine</button></div></div></div>`};
 
 const REPS=[['all','All bills'],...TKEYS.map(k=>[k,TYPES[k].s]),['stock','Medicine stock']];
@@ -1577,7 +1591,7 @@ const cols=Object.keys(rows[0]),csv=[cols,...rows.map(r=>cols.map(c=>r[c]??''))]
 
 let lastV='';
 function render(){clearDashboardCharts();const V={login,home,new:chooser,upload,proc,kind,detail,edit:editView,meds,reports,profile};if(!S.user)S.view='login';if(!V[S.view])S.view='home';
-const app=$('#app');app.innerHTML=V[S.view]();if(lastV!=S.view){(app.querySelector('.flow,.main')||app).classList.add('in');lastV=S.view}window.lucide&&lucide.createIcons();if(S.view=='home')drawDashboardCharts();if(S.view=='detail')loadOriginal();if(S.view=='upload')paintCrop();saveFlow()}
+const app=$('#app');app.innerHTML=V[S.view]();if(lastV!=S.view){(app.querySelector('.flow,.main')||app).classList.add('in');lastV=S.view}window.lucide&&lucide.createIcons();if(S.view=='home')drawDashboardCharts();if(S.view=='detail')loadOriginal();if(S.view=='upload'){if(S.file?.kind=='image'&&EDIT.src!==S.file.source)prepEditor(S.file);paintCrop()}saveFlow()}
 
 /* ---------- reading bills ---------- */
 function withTimeout(promise,ms,message,onTimeout){let timer;return Promise.race([promise,new Promise((_,reject)=>{timer=setTimeout(()=>{onTimeout&&onTimeout();reject(new Error(message))},ms)})]).finally(()=>clearTimeout(timer))}
@@ -1597,17 +1611,17 @@ const r=await withTimeout(w.recognize(canvas),150000,'Reading took too long. Try
 return{conf:r.data.confidence||0,text:r.data.text||'',lines:(r.data.lines||[]).map(l=>({toks:(l.words||[]).map(wd=>({t:wd.text,x0:wd.bbox.x0,x1:wd.bbox.x1,y0:wd.bbox.y0,y1:wd.bbox.y1,c:wd.confidence}))}))}}
 const loadImageEl=file=>new Promise((res,rej)=>{const u=URL.createObjectURL(file),i=new Image();i.onload=()=>res({img:i,done:()=>URL.revokeObjectURL(u)});i.onerror=()=>{URL.revokeObjectURL(u);rej(new Error('This photo cannot be opened. Choose another photo (JPG or PNG).'))};i.src=u});
 // the bill as the person framed it in the photo editor: turned, cropped to its corners and flattened
-async function framedPhoto(f){const{img,done}=await loadImageEl(f.source);try{return BillCrop.flatten(img,f.rot||0,f.quad||BillCrop.FULL(),3600)}finally{done()}}
+async function framedPhoto(f){if(EDIT.img&&EDIT.src===f.source)return BillCrop.flatten(EDIT.img,f.rot||0,f.quad||BillCrop.FULL(),3600);const{img,done}=await loadImageEl(f.source);try{return BillCrop.flatten(img,f.rot||0,f.quad||BillCrop.FULL(),3600)}finally{done()}}
 // read the framed photo. A frame found automatically can be wrong (two papers overlapping), so when
 // it reads poorly and the person did not set it, the whole photo is read too and the better one kept.
 async function readFramed(f,id){const framed=!BillCrop.isFull(f.quad||BillCrop.FULL());let flat=await framedPhoto(f);if(S.run!=id)throw new Error('cancelled');let best=await readPhoto(flat,id,{manual:!!f.touched,framed});
 const weak=b=>b.r.conf<60||!b.d.items.length||b.d.total_amount===''||b.d.warnings.includes('total_calculated');
-if(framed&&!f.touched&&weak(best)){const whole=await framedPhoto({...f,quad:BillCrop.FULL()});if(S.run!=id)throw new Error('cancelled');const other=await readPhoto(whole,id,{framed:false});if(other.score>best.score){best=other;flat=whole}}
+if(framed&&!f.touched&&weak(best)){const whole=await framedPhoto({...f,quad:BillCrop.FULL()});if(S.run!=id)throw new Error('cancelled');const other=await readPhoto(whole,id,{framed:false});if(other.score>best.score){flat.width=flat.height=0;best=other;flat=whole}else whole.width=whole.height=0}
 return{best,flat}}
 // read a framed photo; other quarter turns are tried only when the text does not read
 async function readPhoto(src,id,opts={}){setReadProgress('Cleaning up the photo...',1);await new Promise(r=>setTimeout(r,30));
 const th=BillImage.textSize(src);let best=null;const side=!opts.manual&&BillImage.sideways(src),order=opts.manual?[0,2,1,3]:side?[1,3,0,2]:[0,1,3,2];
-for(const extra of order){if(S.run!=id)throw new Error('cancelled');const canvas=BillImage.prepare(src,extra,{textH:th,noMask:!!opts.framed});const r=await ocrCanvas(canvas,extra?'Turning the photo and reading again...':'Reading your bill...');const d=BillParser.parse({source:'ocr',lines:r.lines},parseCtx());const realTotal=d.total_amount!==''&&!d.warnings.includes('total_calculated');const fits=realTotal&&d.items.length&&!d.warnings.includes('sum_mismatch')&&!d.warnings.includes('items_missing');const score=Math.min(d.items.length,15)*2+(realTotal?4:0)+(fits?5:0)+(d.bill_date?2:0)+(d.bill_number?2:0)+r.conf/5;if(!best||score>best.score)best={score,r,d,rot:extra};
+for(const extra of order){if(S.run!=id)throw new Error('cancelled');const canvas=BillImage.prepare(src,extra,{textH:th,noMask:!!opts.framed});const r=await ocrCanvas(canvas,extra?'Turning the photo and reading again...':'Reading your bill...');canvas.width=canvas.height=0;const d=BillParser.parse({source:'ocr',lines:r.lines},parseCtx());const realTotal=d.total_amount!==''&&!d.warnings.includes('total_calculated');const fits=realTotal&&d.items.length&&!d.warnings.includes('sum_mismatch')&&!d.warnings.includes('items_missing');const score=Math.min(d.items.length,15)*2+(realTotal?4:0)+(fits?5:0)+(d.bill_date?2:0)+(d.bill_number?2:0)+r.conf/5;if(!best||score>best.score)best={score,r,d,rot:extra};
 if(d.items.length&&realTotal&&(d.bill_date||d.bill_number)||r.conf>=70&&(d.bill_date||d.bill_number||d.items.length)||opts.manual&&r.conf>=50&&(d.items.length||realTotal))break}
 return best}
 function groupLines(toks){toks.sort((a,b)=>a.y0-b.y0||a.x0-b.x0);const lines=[];for(const t of toks){const h=Math.max(1,t.y1-t.y0),cy=(t.y0+t.y1)/2,l=lines.find(l=>Math.abs(l.cy-cy)<=Math.max(h,l.h)*0.5);if(l){l.toks.push(t)}else lines.push({cy,h,toks:[t]})}lines.sort((a,b)=>a.cy-b.cy);return lines.map(l=>({toks:l.toks.sort((a,b)=>a.x0-b.x0)}))}
@@ -1699,7 +1713,7 @@ try{if(up){if(acc)return S.msg='An account with this email already exists on thi
 else{if(!acc)return S.msg='No account with this email on this device. Tap Create account first.',render();if(await pwHash(a.pw,unb64(acc.salt),acc.iter)!==acc.hash)return S.msg='Wrong password. Try again.',render()}}
 catch{return S.msg='Could not check the password in this browser. Try again.',render()}finally{S.busy=0}
 S.user={name:acc.name,email:acc.email,admin:true};try{localStorage.setItem(SESSION_KEY,JSON.stringify(S.user))}catch{}S.auth={name:'',email:'',pw:'',pw2:''};S.flow='choose';S.view=savedNames().length?'home':'new';S.msg='';render()},
-go(d){if(d.v=='new'){S.view='new';S.flow='choose';S.msg='';return render()}go(d.v)},
+go(d){if(d.v=='new'){S.view='new';S.flow='choose';S.msg='';return render()}if(!['upload','proc','kind','edit'].includes(d.v))editorRelease();go(d.v)},
 newbill(){S.type='general';S.flow='choose';S.partyName='';S.selectedName='';if(S.file?.url)URL.revokeObjectURL(S.file.url);editorRelease();S.file=null;go('new')},
 backChoose(){S.flow='choose';S.msg='';render()},
 backName(){if(S.file?.url)URL.revokeObjectURL(S.file.url);editorRelease();S.file=null;go('new')},

@@ -200,6 +200,10 @@ ${['left:0;top:0', 'right:0;top:0', 'right:0;bottom:0', 'left:0;bottom:0'].map(p
     ok(await S('BillCrop.isFull(S.file.quad)'), 'Whole photo uses the whole picture');
     await page.click('[data-a="cropFit"]');
     ok(await S('sameQuad(S.file.quad,S.file.auto)'), 'Fit to bill puts the frame back on the bill');
+    await page.evaluate(() => { S.file.touched = 0; });
+    const still = await (await page.$('#crop .ch[data-h="2"]')).boundingBox();
+    await page.mouse.move(still.x + still.width / 2, still.y + still.height / 2); await page.mouse.down(); await page.mouse.up();
+    ok(!(await S('S.file.touched')), 'tapping a corner without moving it leaves the frame as it was found');
     await page.click('[data-a="submit"]');
     let v = await idle();
     if (v.v === 'kind') { await page.click('[data-a="pickType"][data-t="lab"]'); await page.click('[data-a="saveKind"]'); await page.waitForFunction(() => !S.busy && S.view !== 'kind'); }
@@ -209,6 +213,41 @@ ${['left:0;top:0', 'right:0;top:0', 'right:0;bottom:0', 'left:0;bottom:0'].map(p
     const kept = await page.evaluate(async () => { const b = await IDB.get(S.bills[0].id); const i = await createImageBitmap(b); return i.width / i.height; });
     const billRatio = Math.hypot((corners[1][0] - corners[0][0]) * 900, (corners[1][1] - corners[0][1]) * 1200) / Math.hypot((corners[3][0] - corners[0][0]) * 900, (corners[3][1] - corners[0][1]) * 1200);
     ok(Math.abs(kept - billRatio) / billRatio < 0.06, 'the saved copy is the flattened bill, not the whole photo');
+
+    // a long receipt gets a taller editor, so its corners are not crowded together
+    const tallShot = await browser.newPage({ viewport: { width: 420, height: 1500 } });
+    await tallShot.setContent(`<html><body style="margin:0;background:#fff;font:22px monospace"><pre style="margin:20px">${Array.from({ length: 40 }, (_, i) => `ITEM ${i + 1}      1    10.00`).join('\n')}</pre></body></html>`);
+    const receipt = await tallShot.screenshot({ type: 'png' });
+    await tallShot.close();
+    await page.evaluate(() => { A.newbill(); S.flow = 'newName'; S.partyName = 'Long receipt'; go('upload'); });
+    await page.setInputFiles('#f2', { name: 'receipt.png', mimeType: 'image/png', buffer: receipt });
+    await page.waitForSelector('#crop .ch', { timeout: 20000 });
+    const tallBox = await (await page.$('#crop')).boundingBox();
+    ok(tallBox.height > 844 * 0.5, 'a long receipt gets a taller photo editor (' + Math.round(tallBox.height) + ' px)');
+    await page.click('[data-a="rmfile"]');
+    ok(await S('!S.file && !EDIT.img'), 'removing the photo lets go of it');
+    // a photo that cannot be read sends the person back to the frame, even after the photo was let go
+    const blankShot = await browser.newPage({ viewport: { width: 600, height: 800 } });
+    await blankShot.setContent('<body style="margin:0;background:#fff"></body>');
+    const blank = await blankShot.screenshot({ type: 'png' });
+    await blankShot.close();
+    await page.evaluate(() => { A.newbill(); S.flow = 'newName'; S.partyName = 'Blank page'; go('upload'); });
+    await page.setInputFiles('#f2', { name: 'blank.png', mimeType: 'image/png', buffer: blank });
+    await page.waitForSelector('#crop .ch', { timeout: 20000 });
+    await page.click('[data-a="submit"]');
+    await idle();
+    ok(!!(await page.$('[data-a="reframe"]')) && !(await S('S.bills.some(b=>b.party=="Blank page")')), 'a photo that cannot be read is not saved and offers Fix the frame');
+    await page.evaluate(() => editorRelease());
+    await page.click('[data-a="reframe"]');
+    await page.waitForSelector('#crop .ch', { timeout: 20000 });
+    ok(await S('S.view') === 'upload' && await S('!!EDIT.img'), 'Fix the frame goes back to the photo editor and opens the photo again');
+    await page.click('[data-a="rmfile"]');
+
+    console.log('Dashboard');
+    await page.evaluate(() => go('home'));
+    const due = await S('S.meds.filter(m=>st(m)!="good"&&m.qty>0).length');
+    await page.click('.dt[data-a="medgo"]');
+    ok(due > 0 && await S('S.mf') === 'due' && await page.$$eval('#ml .card', c => c.length) === due, 'the "Expiring or expired" number opens exactly those medicines');
 
     console.log('Duplicates, edits, deletes');
     await upload('Sri Sai Pharma', '#f2', 'invoice.png', 'image/png', files.purchaseMono, 'medicine_purchase');

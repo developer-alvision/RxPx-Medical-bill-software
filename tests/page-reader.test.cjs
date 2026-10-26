@@ -191,3 +191,49 @@ Grand Total                     1487.88`);
   assert.deepEqual(d.items.map(i => [i.description, i.amount]), [['LIMCEE 500 CHEW TAB', 464.25], ['BECOSULES CAP', 465.48], ['ONDEM 4 TAB', 558.15]]);
   assert.ok(!d.warnings.includes('sum_mismatch'));
 });
+
+test('review fixes: "@ rate" rows, "After Discount" totals, GST in a total line, units after a number', () => {
+  const at = readText(`
+Sl Particulars                          Days   Amount
+1  Room Rent @1500.00 per day              3   4500.00
+2  Nursing Care @300.00 per day            3    900.00
+3  Doctor Visit                            2   1000.00
+Total                                          6400.00`);
+  assert.deepEqual(at.items.map(i => i.amount), [4500, 900, 1000], '"@ 1500.00" is a rate, not an e-mail address');
+  const after = readText(`
+Sl Test Name                    Amount
+1  Lipid Profile                650.00
+2  Serum Creatinine             200.00
+Gross Total                     850.00
+Discount                         85.00
+Net Amount After Discount       765.00`);
+  assert.deepEqual([after.total_amount, after.discount_amount], [765, 85]);
+  const gst = readText(`
+Sl Product                Qty   Rate    Amount
+1  DOLO 650 TAB            20   24.10   482.00
+2  PAN 40 TAB              15  110.40  1656.00
+Taxable Value                          2138.00
+CGST 6%                                 128.28
+SGST 6%                                 128.28
+Grand Total (Incl. GST)                2394.56`);
+  assert.deepEqual([gst.total_amount, gst.tax_amount], [2394.56, 256.56]);
+  assert.ok(!gst.warnings.includes('sum_mismatch'));
+  const units = readText(`
+CITY MEDICALS
+Bill No: 4471   Date: 20/10/2026
+1000 ML NS Bottle          2   90.00   180.00
+50 ML Syringe              5   12.00    60.00
+Net Amount                         240.00`);
+  assert.deepEqual(units.items.map(i => i.description), ['1000 ML NS Bottle', '50 ML Syringe']);
+});
+
+test('a row whose own maths works is never dropped to match a total', () => {
+  const d = readText(`
+Sl Particulars              Qty   Rate    Amount
+1  Phenyl 5 Ltr Can           4  320.00  1280.00
+2  Register Book             10   60.00   600.00
+3  Ball Pens Blue             3   50.00   150.00
+Total                                     750.00`);
+  assert.deepEqual(d.items.map(i => i.description), ['Phenyl 5 Ltr Can', 'Register Book', 'Ball Pens Blue']);
+  assert.ok(d.warnings.some(w => w === 'total_calculated' || w === 'sum_mismatch'), 'the mismatch is shown for checking instead');
+});
