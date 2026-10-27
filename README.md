@@ -3,6 +3,8 @@
 > **Current page:** `medical bills.html` is the browser-only version of RxPx. It keeps bills, stock and sign-in accounts in the browser it is opened in (IndexedDB) and does not use Supabase. The Supabase files below (`medical-bills.js`, `bill-extraction.js`, `bill-export.js`, `app-config.js`, `supabase/`) are not loaded by this page. Checks for this page: `npm test` (bill reader) and `npm run test:page` (browser flows).
 >
 > **Photos on this page:** after a photo is chosen it opens in a small editor. An orange frame is put on the bill's corners by itself; drag a dot to fix a corner (a magnifier shows under the finger), use **Turn left** / **Turn right**, **Fit to bill** or **Whole photo**. The bill inside the frame is flattened and straightened before it is read, and that flattened copy is kept with the saved bill. Text outside the frame (the table, other papers) is never read.
+>
+> **Camera and gallery:** some in-app viewers cannot open the camera or the file picker. When a tap on an option opens nothing on an Android phone, the page says so; open the link in a browser such as Chrome instead.
 
 Read hospital bills, review extracted values, and save **data only** to each signed-in account's Supabase database. Source images, PDFs, Excel workbooks, and CSV files are used temporarily for extraction and are **not saved**. The app uses **Indian rupees (₹ / INR) only**.
 

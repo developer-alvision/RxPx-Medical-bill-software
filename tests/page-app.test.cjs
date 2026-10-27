@@ -1,6 +1,7 @@
 /* Browser checks for the page the app runs ('medical bills.html'): accounts, saved data,
  * reading photo / PDF / Excel bills, the photo editor (frame on the bill's corners, turn),
- * stock in and out, expired batches, duplicates, edits, deletes, reports, export and two open tabs.
+ * the upload options and photo editor on a small phone screen, stock in and out, expired batches,
+ * duplicates, edits, deletes, reports, export and two open tabs.
  * Run: node tests/page-app.test.cjs
  * Needs Playwright with Chromium (or PLAYWRIGHT_PACKAGE) and internet access for the page's
  * CDN libraries. Offline: set RXPX_CDN_DIR to a node_modules folder holding lucide@0.469.0,
@@ -222,8 +223,8 @@ ${['left:0;top:0', 'right:0;top:0', 'right:0;bottom:0', 'left:0;bottom:0'].map(p
     await page.evaluate(() => { A.newbill(); S.flow = 'newName'; S.partyName = 'Long receipt'; go('upload'); });
     await page.setInputFiles('#f2', { name: 'receipt.png', mimeType: 'image/png', buffer: receipt });
     await page.waitForSelector('#crop .ch', { timeout: 20000 });
-    const tallBox = await (await page.$('#crop')).boundingBox();
-    ok(tallBox.height > 844 * 0.5, 'a long receipt gets a taller photo editor (' + Math.round(tallBox.height) + ' px)');
+    const tallBox = await (await page.$('#crop')).boundingBox(), tallBar = await page.$eval('.bar', b => b.getBoundingClientRect().top);
+    ok(tallBox.y + tallBox.height <= tallBar + 1 && tallBox.y + tallBox.height >= tallBar - 30, 'a long receipt uses all the height above the Submit bar (' + Math.round(tallBox.height) + ' px)');
     await page.click('[data-a="rmfile"]');
     ok(await S('!S.file && !EDIT.img'), 'removing the photo lets go of it');
     // a photo that cannot be read sends the person back to the frame, even after the photo was let go
@@ -242,6 +243,36 @@ ${['left:0;top:0', 'right:0;top:0', 'right:0;bottom:0', 'left:0;bottom:0'].map(p
     await page.waitForSelector('#crop .ch', { timeout: 20000 });
     ok(await S('S.view') === 'upload' && await S('!!EDIT.img'), 'Fix the frame goes back to the photo editor and opens the photo again');
     await page.click('[data-a="rmfile"]');
+
+    console.log('Small phone screen');
+    await page.setViewportSize({ width: 360, height: 640 });
+    await page.evaluate(() => { A.newbill(); S.flow = 'newName'; S.partyName = 'Small screen'; go('upload'); scrollTo(0, 0); });
+    const picks = await page.evaluate(() => ({ bar: !!document.querySelector('.bar'), bottoms: [...document.querySelectorAll('label.tile')].map(l => l.getBoundingClientRect().bottom) }));
+    ok(!picks.bar && picks.bottoms.length === 4 && picks.bottoms.every(b => b <= 640), 'the four upload options fit a 360 x 640 screen, with no Submit bar over them');
+    // headless Chromium opens no picker here, like the in-app viewers that cannot reach the camera
+    await page.tap('label[for="f2"]');
+    const told = await page.waitForFunction(() => /Nothing opened\?/.test(S.msg), null, { timeout: 5000 }).then(() => true, () => false);
+    ok(told && await page.$eval('[role="alert"]', e => e.getBoundingClientRect().top >= 0 && e.getBoundingClientRect().bottom <= 640), 'a tap that opens nothing says, on screen, to open the link in a browser');
+    // a photo chosen while the screen was redrawn behind the open picker still arrives
+    const chooserOpened = page.waitForEvent('filechooser');
+    await page.tap('label[for="f2"]');
+    const chooser = await chooserOpened;
+    await page.evaluate(() => render());
+    await chooser.setFiles({ name: 'lab-photo.jpg', mimeType: 'image/jpeg', buffer: tablePhoto });
+    ok(await page.waitForSelector('#crop .ch', { timeout: 20000 }).then(() => true, () => false), 'a photo chosen after the screen was redrawn behind the picker still arrives');
+    await page.evaluate(() => scrollTo(0, 0));
+    await page.waitForTimeout(400); // measure after any entrance animation has finished
+    const small = await page.evaluate(() => ({ msg: S.msg, bar: document.querySelector('.bar').getBoundingClientRect().top, tools: [...document.querySelectorAll('.ctools .btn')].map(b => [b.getBoundingClientRect().top, b.getBoundingClientRect().bottom]), photo: document.querySelector('#crop').getBoundingClientRect() }));
+    ok(!small.msg && small.tools.length === 4 && small.tools.every(([t, b]) => t >= 0 && b <= small.bar), 'Turn left, Turn right, Fit to bill and Whole photo are all above the Submit bar');
+    ok(small.photo.top >= 0 && small.photo.bottom <= small.bar + 1, 'the whole photo and its frame fit above the Submit bar');
+    // a tap that redraws the same screen does not replay its entrance fade (the screen used to blink)
+    await page.waitForTimeout(400);
+    await page.tap('[data-a="turn"][data-d="1"]');
+    const shown = await page.evaluate(() => +getComputedStyle(document.querySelector('.flow')).opacity);
+    await page.tap('[data-a="turn"][data-d="-1"]');
+    ok(shown > 0.95, 'tapping Turn right does not make the screen blink');
+    await page.click('[data-a="rmfile"]');
+    await page.setViewportSize({ width: 390, height: 844 });
 
     console.log('Dashboard');
     await page.evaluate(() => go('home'));
