@@ -251,8 +251,24 @@ ${['left:0;top:0', 'right:0;top:0', 'right:0;bottom:0', 'left:0;bottom:0'].map(p
     ok(!picks.bar && picks.bottoms.length === 4 && picks.bottoms.every(b => b <= 640), 'the four upload options fit a 360 x 640 screen, with no Submit bar over them');
     // headless Chromium opens no picker here, like the in-app viewers that cannot reach the camera
     await page.tap('label[for="f2"]');
-    const told = await page.waitForFunction(() => /Nothing opened\?/.test(S.msg), null, { timeout: 5000 }).then(() => true, () => false);
-    ok(told && await page.$eval('[role="alert"]', e => e.getBoundingClientRect().top >= 0 && e.getBoundingClientRect().bottom <= 640), 'a tap that opens nothing says, on screen, to open the link in a browser');
+    const told = await page.waitForFunction(() => blocked(), null, { timeout: 5000 }).then(() => true, () => false);
+    ok(told && /can't open on this screen/.test(await text()) && await page.$$eval('.blocked .stack [data-a]', bs => bs.length === 2 && bs.every(b => b.getBoundingClientRect().top >= 0 && b.getBoundingClientRect().bottom <= 640)), 'a tap that opens nothing says, in plain words, that the camera and files cannot open here, with both ways on in view on a 360 x 640 screen');
+    const blockedUi = await page.evaluate(() => ({ typed: !!document.querySelector('.blocked [data-a="manual"]'), copy: !!document.querySelector('.blocked [data-a="copylink"]'), link: document.querySelector('.blocked .lk').innerText, here: location.href, kept: !!localStorage.getItem('rxpx-nopick-v1') }));
+    ok(blockedUi.typed && blockedUi.copy && blockedUi.link === blockedUi.here && blockedUi.kept, 'it offers Type the details myself and Copy link for Chrome, shows the link, and remembers it');
+    await page.evaluate(() => { window.__copied = null; Object.defineProperty(navigator, 'clipboard', { value: { writeText: async t => { window.__copied = t; } }, configurable: true }); });
+    await page.tap('[data-a="copylink"]');
+    ok(await page.evaluate(() => window.__copied === location.href) && /Link copied/.test(await page.$eval('#toast', e => e.innerText)), 'Copy link puts the page address on the clipboard');
+    await page.evaluate(() => { Object.defineProperty(navigator, 'clipboard', { value: { writeText: async () => { throw new Error('blocked'); } }, configurable: true }); });
+    await page.tap('[data-a="copylink"]');
+    ok(await page.$eval('#toast', e => /copied|hold/i.test(e.innerText)), 'Copy link still answers when the clipboard is blocked');
+    await page.evaluate(() => { Object.defineProperty(navigator, 'userAgent', { get: () => 'Mozilla/5.0 (Linux; Android 13; Pixel 7 Build/TQ3A.230901.001; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/117.0.0.0 Mobile Safari/537.36', configurable: true }); });
+    ok(/Android app view/.test(await page.evaluate(() => pickInfo())), 'the details line says when this is an Android app view');
+    await page.evaluate(() => { S.nopick = 0; render(); });
+    ok(!!(await page.$('.blocked')), 'the explanation is there when the upload screen opens again, before any button is tapped');
+    await page.tap('.blocked [data-a="manual"]');
+    ok(await S('S.view') === 'edit' && await S('S.edit.isNew && S.edit.party') === 'Small screen', 'Type the details myself opens the bill form with the name filled in');
+    await page.tap('[data-a="cancelEdit"]');
+    ok(await S('S.view') === 'upload' && !!(await page.$('.typein [data-a="manual"]')), 'Back returns to the upload screen, where No bill photo? Type the details myself sits under the options');
     // a photo chosen while the screen was redrawn behind the open picker still arrives
     const chooserOpened = page.waitForEvent('filechooser');
     await page.tap('label[for="f2"]');
@@ -260,6 +276,7 @@ ${['left:0;top:0', 'right:0;top:0', 'right:0;bottom:0', 'left:0;bottom:0'].map(p
     await page.evaluate(() => render());
     await chooser.setFiles({ name: 'lab-photo.jpg', mimeType: 'image/jpeg', buffer: tablePhoto });
     ok(await page.waitForSelector('#crop .ch', { timeout: 20000 }).then(() => true, () => false), 'a photo chosen after the screen was redrawn behind the picker still arrives');
+    ok(await page.evaluate(() => localStorage.getItem('rxpx-nopick-v1') === null && !blocked()), 'choosing a photo shows the pickers work here, so the explanation is gone');
     await page.evaluate(() => scrollTo(0, 0));
     await page.waitForTimeout(400); // measure after any entrance animation has finished
     const small = await page.evaluate(() => ({ msg: S.msg, bar: document.querySelector('.bar').getBoundingClientRect().top, tools: [...document.querySelectorAll('.ctools .btn')].map(b => [b.getBoundingClientRect().top, b.getBoundingClientRect().bottom]), photo: document.querySelector('#crop').getBoundingClientRect() }));

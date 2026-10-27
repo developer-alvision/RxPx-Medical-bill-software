@@ -101,6 +101,15 @@ tr:last-child td{border-bottom:0}
 .picks{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .picks .tile{flex-direction:column;justify-content:center;text-align:center;gap:10px;min-height:118px;padding:14px 10px;margin:0}
 .picks .tile b{font-size:15px;line-height:1.25}
+/* the camera and files cannot open on this screen (an app's built-in viewer) */
+.blocked{border-left:4px solid var(--wn);margin:0 0 14px}
+.blocked .bt{display:flex;gap:10px;align-items:flex-start}.blocked .bt i{color:var(--wn);margin-top:1px}
+.blocked>p{margin-top:6px;line-height:1.4}
+.blocked .stack{margin-top:12px}.blocked .stack>*+*{margin-top:10px}
+.blocked .note{margin-top:12px}
+.blocked .lk{display:block;margin-top:6px;padding:8px 10px;border-radius:10px;background:hsl(var(--border)/.5);font-size:12.5px;line-height:1.35;overflow-wrap:anywhere;user-select:all;-webkit-user-select:all}
+.blocked details{margin-top:6px;font-size:13px;color:var(--mu)}.blocked summary{min-height:36px;display:flex;align-items:center;cursor:pointer}
+.typein{margin-top:8px;text-align:center}.typein .lnk{justify-content:center}
 
 /* photo editor: turn the photo and frame the bill before reading */
 .crop{position:relative;margin-left:auto;margin-right:auto;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;--h:clamp(190px,calc(100vh - 430px),52vh);width:min(100%,calc(var(--h)*var(--r)))}
@@ -1376,7 +1385,7 @@ const BillCrop = (() => {
   return { FULL, detect, flatten, turned, turnQuad, order, valid, isFull, area };
 })();
 
-const APP_UPDATED='27 Oct 2026',CFG={HOSPITAL_NAME:"RxPx Hospitals",CURRENCY:"₹",EXPIRY_WARNING_DAYS:7,LOW_STOCK_LIMIT:10};
+const APP_UPDATED='27 Oct 2026, build 2',CFG={HOSPITAL_NAME:"RxPx Hospitals",CURRENCY:"₹",EXPIRY_WARNING_DAYS:7,LOW_STOCK_LIMIT:10,OPEN_URL:""};
 // the distinctive word of the hospital name, used to tell bills the hospital issued (sales) from bills it received (purchases)
 CFG.HOSPITAL_KEY=CFG.HOSPITAL_NAME.toLowerCase().replace(/[^a-z ]/g,' ').split(/\s+/).filter(w=>w.length>=3&&!/^(hospitals?|clinic|sri|shri|sree|the|and|medical|care|centre|center|multi|speciality|specialty|super|nursing|home|health|healthcare|institute|of)$/.test(w)).sort((a,b)=>b.length-a.length)[0]||'';
 const TYPES={
@@ -1534,9 +1543,21 @@ ctx.strokeStyle='#F47B20';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(64,42);ctx.
 function cropMove(d,dx,dy,quiet){const f=S.file;if(!f?.quad)return;const c=v=>Math.min(1,Math.max(0,v)),q=d.q0.map(p=>p.slice()),ks=d.i<4?[d.i]:[d.i-4,(d.i-3)%4];
 for(const k of ks)q[k]=[c(d.q0[k][0]+dx),c(d.q0[k][1]+dy)];if(!BillCrop.valid(q,0.02))return;if(!sameQuad(q,f.quad))f.touched=1;f.quad=q;cropDraw();
 if(!quiet)cropLoupe(ks.length==1?q[ks[0]]:[(q[ks[0]][0]+q[ks[1]][0])/2,(q[ks[0]][1]+q[ks[1]][1])/2])}
+// The camera and file pickers cannot open on some screens (an app's built-in viewer, such as the Claude
+// app's): say so once, in plain words, with a way on that works there (type the bill) and the address to
+// paste into Chrome, where all four buttons work.
+async function copyText(t){try{await navigator.clipboard.writeText(t);return true}catch{}
+try{const a=document.createElement('textarea');a.value=t;a.setAttribute('readonly','');a.style.cssText='position:fixed;left:0;top:0;opacity:0;font-size:16px';document.body.appendChild(a);a.select();a.setSelectionRange(0,t.length);const ok=document.execCommand('copy');a.remove();return ok}catch{return false}}
+function pickInfo(){const ua=navigator.userAgent,app=/; wv\)/.test(ua)?'Android app view':IOS&&!/Safari\//.test(ua)?'iPhone app view':touch?'phone browser':'browser';let cam='unknown';try{const p=document.featurePolicy;if(p&&p.allowsFeature)cam=p.allowsFeature('camera')?'allowed':'blocked'}catch{}return `${app} · camera ${cam} · pickers did not open`}
+function blockedCard(){if(!blocked())return'';
+return `<div class="card blocked" role="alert"><div class="bt">${ic('triangle-alert')}<b>Camera and files can't open on this screen</b></div>
+<p class="mu sm">This viewer (like the Claude app) blocks them. In Chrome, all four buttons should work.</p>
+<div class="stack"><button class="btn pri" data-a="manual">${ic('pencil')}Type the details myself</button><button class="btn" data-a="copylink">${ic('link')}Copy link for Chrome</button></div>
+<p class="note">Open Chrome and paste this link:</p><span class="lk">${esc(openUrl())}</span>
+<details><summary>Details</summary>${esc(pickInfo())}</details></div>`}
 function upload(){const f=S.file,rt=f?.kind=='sheet'?'f5':f?.kind=='pdf'?'f3':touch?'f1':'f4';
-const pick=touch?`<div class="picks"><label class="card tile" for="f1"><span class="ib">${ic('camera')}</span><b>Take Photo</b></label><label class="card tile" for="f2"><span class="ib">${ic('image')}</span><b>Choose from Gallery</b></label><label class="card tile" for="f3"><span class="ib">${ic('file-text')}</span><b>Upload PDF</b></label><label class="card tile" for="f5"><span class="ib">${ic('file-spreadsheet')}</span><b>Upload Excel or CSV</b></label></div><p class="note">Tip: lay the bill flat in good light and fill the screen with the whole bill.</p>`:`<label class="drop" id="drop" for="f4">${ic('upload')}<b>Choose a bill image, PDF, Excel, or CSV</b><div class="mu sm">Up to 25 MB</div></label>`;
-return `<div class="flow"><button class="lnk" data-a="backName">${ic('chevron-left')}Back</button>${steps(3)}<h1>Add your bill</h1>${f?`<p class="mu sm" style="margin:6px 0 14px">Name on bill: <b style="color:var(--fg)">${esc(S.partyName)}</b></p>`:`<div class="card" style="margin:16px 0"><div class="mu sm">Name on bill</div><b>${esc(S.partyName)}</b></div>`}${S.msg?`<div class="warn" role="alert" style="margin:0 0 14px">${ic('triangle-alert')}<div>${esc(S.msg)}</div></div>`:''}
+const typein=`<p class="typein"><button class="lnk" data-a="manual">${ic('pencil')}No bill photo? Type the details myself</button></p>`,pick=(touch?`<div class="picks"><label class="card tile" for="f1"><span class="ib">${ic('camera')}</span><b>Take Photo</b></label><label class="card tile" for="f2"><span class="ib">${ic('image')}</span><b>Choose from Gallery</b></label><label class="card tile" for="f3"><span class="ib">${ic('file-text')}</span><b>Upload PDF</b></label><label class="card tile" for="f5"><span class="ib">${ic('file-spreadsheet')}</span><b>Upload Excel or CSV</b></label></div><p class="note">Tip: lay the bill flat in good light and fill the screen with the whole bill.</p>`:`<label class="drop" id="drop" for="f4">${ic('upload')}<b>Choose a bill image, PDF, Excel, or CSV</b><div class="mu sm">Up to 25 MB</div></label>`)+typein;
+return `<div class="flow"><button class="lnk" data-a="backName">${ic('chevron-left')}Back</button>${steps(3)}<h1>Add your bill</h1>${f?`<p class="mu sm" style="margin:6px 0 14px">Name on bill: <b style="color:var(--fg)">${esc(S.partyName)}</b></p>`:`<div class="card" style="margin:16px 0"><div class="mu sm">Name on bill</div><b>${esc(S.partyName)}</b></div>`}${f?'':blockedCard()}${S.msg?`<div class="warn" role="alert" style="margin:0 0 14px">${ic('triangle-alert')}<div>${esc(S.msg)}</div></div>`:''}
 ${f?`<div class="card stack">${f.kind=='image'?`${cropper(f)}<div class="g2"><label class="btn" for="${rt}">${ic('refresh-cw')}Retake</label><button class="btn" data-a="rmfile">${ic('trash-2')}Remove</button></div>`:`<div class="sp" style="justify-content:flex-start">${ic('file-text')}<b>${esc(f.name)}</b></div><div class="g2"><label class="btn" for="${rt}">${ic('refresh-cw')}Change</label><button class="btn" data-a="rmfile">${ic('trash-2')}Remove</button></div>`}</div>`:pick}
 ${f?`<div class="bar"><div><button class="btn pri" data-a="submit">Submit</button></div></div>`:''}</div>`}
 
@@ -1772,6 +1793,7 @@ open(d){S.detail=d.id;S.msg='';go('detail')},ask(){S.ask=1;S.msg='';render()},no
 async del(){const bill=S.bills.find(b=>b.id==S.detail);if(!bill)return go('home');const oldBills=S.bills.slice(),oldMeds=S.meds.map(m=>({...m})),oldImpact=S.lastUpload,issue=reverseStock(bill);if(issue){S.meds=oldMeds;S.msg=issue;return render()}S.bills=S.bills.filter(b=>b.id!=S.detail);if(S.lastUpload?.id==bill.id)S.lastUpload=null;S.busy=1;const ok=await persist();S.busy=0;if(!ok){S.bills=oldBills;S.meds=oldMeds;S.lastUpload=oldImpact;S.msg='Could not save the deletion. Free space and try again.';return render()}IDB.del(bill.id).catch(()=>{});if(S.img[bill.id]){URL.revokeObjectURL(S.img[bill.id]);delete S.img[bill.id]}go('home');toast('Bill deleted and stock updated')},
 edit(){const b=S.bills.find(x=>x.id==S.detail);if(!b)return go('home');S.edit=JSON.parse(JSON.stringify({id:b.id,type:TYPES[b.type]?b.type:'',party:b.party||'',bill_number:b.bill_number||'',bill_date:b.bill_date||'',total:b.total??'',tax:b.tax??'',disc:b.disc??'',mode:b.mode||'',items:b.items.map(i=>({...i}))}));go('edit')},
 cancelEdit(){const n=S.edit?.isNew;S.edit=null;go(n?'upload':'detail')},
+async copylink(){const ok=await copyText(openUrl());toast(ok?'Link copied. Paste it in Chrome.':'Press and hold the link to copy it.')},
 manual(){const t=new Date(),iso=`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;S.run=0;S.bad=0;S.edit={id:null,isNew:true,type:priorType(S.partyName)||'',party:S.partyName,bill_number:'',bill_date:iso,total:'',tax:'',disc:'',mode:'',items:[{description:'',batch_no:'',manufacture_date:'',expiry_date:'',quantity:1,free:'',mrp:'',rate:'',amount:''}]};S.msg='';go('edit')},
 addItem(){S.edit.items.push({description:'',batch_no:'',manufacture_date:'',expiry_date:'',quantity:1,free:'',mrp:'',rate:'',amount:''});render()},
 rmItem(d){S.edit.items.splice(+d.i,1);render()},
@@ -1805,17 +1827,22 @@ document.addEventListener('input',e=>{const k=e.target.dataset.k;if(!k)return;co
 if(e.target.dataset.re)render();
 if(k=='f.mq'){$('#ml').innerHTML=medList();window.lucide&&lucide.createIcons()}if(k=='f.bq'&&$('#bl')){$('#bl').innerHTML=billsHtml();window.lucide&&lucide.createIcons()}});
 document.addEventListener('keydown',e=>{if(e.key=='Enter'&&e.target.id=='partyName'){e.preventDefault();A.continueName();return}if(e.key!='Escape')return;if(S.sheet){S.sheet=0;render()}else if(S.ask){S.ask=0;render()}});
-document.addEventListener('change',e=>{const el=e.target;if(el.tagName=='SELECT')return;if(el.type!='file'||!el.files[0])return;const fl=el.files[0];el.value='';
+document.addEventListener('change',e=>{const el=e.target;if(el.tagName=='SELECT')return;if(el.type!='file'||!el.files[0])return;const fl=el.files[0];el.value='';setBlocked(false);
 const kind=fileKind(fl);if(!kind){S.msg='Please choose a bill photo, PDF, Excel workbook, or CSV file.';return render()}
 if(fl.size>(kind=='image'?25:20)*1024*1024){S.msg=`That file is larger than ${kind=='image'?25:20} MB. Please choose a smaller one.`;return render()}
 if(S.file?.url)URL.revokeObjectURL(S.file.url);S.msg='';S.file={name:fl.name,type:fl.type,kind,rot:0,url:'',source:fl,quad:null,auto:null,touched:0};if(kind!='image')editorRelease();render();if(kind=='image')prepEditor(S.file);warmReader()});
-const PICK={end:null},NOPICK='Nothing opened? This screen may not be able to open your camera or files. Open this link in a browser such as Chrome and try again.',IOS=/iP(hone|ad|od)/.test(navigator.userAgent)||navigator.platform=='MacIntel'&&navigator.maxTouchPoints>1;
+const PICK={end:null},IOS=/iP(hone|ad|od)/.test(navigator.userAgent)||navigator.platform=='MacIntel'&&navigator.maxTouchPoints>1,NOPICK_KEY='rxpx-nopick-v1',
+// "this screen cannot open the camera or files" is remembered for three days, so the explanation is there
+// when the upload screen opens; a photo or file that is chosen shows the pickers work, and clears it
+blocked=()=>{if(S.nopick)return true;try{const t=+localStorage.getItem(NOPICK_KEY);return t>0&&Date.now()-t<3*864e5}catch{return false}},
+setBlocked=on=>{S.nopick=on?1:0;try{on?localStorage.setItem(NOPICK_KEY,String(Date.now())):localStorage.removeItem(NOPICK_KEY)}catch{}},
+openUrl=()=>CFG.OPEN_URL||location.href;
 document.addEventListener('click',e=>{const l=e.target.closest&&e.target.closest('label[for]'),input=l&&document.getElementById(l.htmlFor);if(!input||input.type!='file'||!touch||IOS)return;
 PICK.end?.();const t0=Date.now();let opened=false;
-const away=()=>{opened=true},tell=()=>{if(opened||S.view!='upload')return;opened=true;S.msg=NOPICK;render()},
+const away=()=>{opened=true;if(blocked()){setBlocked(false);render()}},tell=()=>{if(opened||S.view!='upload')return;opened=true;S.nopickAt=t0;setBlocked(true);render();$('.blocked')?.scrollIntoView({block:'nearest'})},
 // a picker that cannot open is cancelled at once; one that opened and was closed takes longer (and
-// shows that the message was not needed)
-cancel=()=>{if(Date.now()-t0<700)return tell();opened=true;if(S.msg==NOPICK){S.msg='';render()}},
+// shows that the explanation was not needed)
+cancel=()=>{if(Date.now()-t0<700)return tell();opened=true;if(S.nopickAt==t0){S.nopickAt=0;setBlocked(false);render()}},
 timer=setTimeout(()=>{if(!document.hidden&&document.hasFocus())tell()},2500);
 addEventListener('blur',away);document.addEventListener('visibilitychange',away);input.addEventListener('change',away);input.addEventListener('cancel',cancel);
 PICK.end=()=>{clearTimeout(timer);removeEventListener('blur',away);document.removeEventListener('visibilitychange',away);input.removeEventListener('change',away);input.removeEventListener('cancel',cancel)}},true);

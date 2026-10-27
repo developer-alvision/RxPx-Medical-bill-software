@@ -4,7 +4,7 @@
 >
 > **Photos on this page:** after a photo is chosen it opens in a small editor. An orange frame is put on the bill's corners by itself; drag a dot to fix a corner (a magnifier shows under the finger), use **Turn left** / **Turn right**, **Fit to bill** or **Whole photo**. The bill inside the frame is flattened and straightened before it is read, and that flattened copy is kept with the saved bill. Text outside the frame (the table, other papers) is never read.
 >
-> **Camera and gallery:** some in-app viewers cannot open the camera or the file picker. When a tap on an option opens nothing on an Android phone, the page says so; open the link in a browser such as Chrome instead.
+> **Camera and gallery:** some in-app viewers (the Claude app's built-in viewer, for one) never open the camera or the file picker, and a web page cannot change that. When a tap on an option opens nothing on a phone, the upload screen says so in plain words, remembers it for three days, and offers **Type the details myself** (works in any viewer) and **Copy link for Chrome**, where all four buttons work. **No bill photo? Type the details myself** is also under the four options. A hosted copy can set `OPEN_URL` in `CFG` to the address people should paste into Chrome; without it the page's own address is used.
 >
 > **Saved bills:** bills and stock are kept in the browser of the device and are shared by everyone who signs in on it, so each login shows the same bills. **Profile → Saved bills** removes bills that look like copies of another (the first saved is kept and the stock they changed is put back) or deletes everything on the device to start fresh. The dashboard says when it finds copies. The bottom of Profile shows when this copy of the app was last updated.
 
