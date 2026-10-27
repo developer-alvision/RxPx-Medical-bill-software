@@ -56,6 +56,7 @@ i[data-lucide],svg.lucide{width:20px;height:20px;stroke-width:1.75;flex:none}
 .note{font-size:14px;color:var(--mu);margin-top:12px}.err{font-size:14px;color:var(--er);margin-top:12px}
 .ps{display:flex;gap:16px;align-items:center;min-height:56px}.ps .d{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;border:1.5px solid var(--bd);flex:none}.ps.done .d{background:var(--ok);border-color:var(--ok);color:#fff}.ps.act .d{border-color:var(--pr);border-top-color:transparent;animation:sp 1s linear infinite}.ps.bad .d{background:var(--er);border-color:var(--er);color:#fff}.ps .d i{width:16px;height:16px}
 @keyframes sp{to{transform:rotate(360deg)}}
+.cl{margin:0;padding-left:18px;font-size:14px;color:var(--mu)}.cl li+li{margin-top:4px}
 .dl{display:grid;grid-template-columns:auto 1fr;gap:4px 16px;font-size:15px}.dl dt{color:var(--mu)}.dl dd{margin:0;text-align:right}
 .brand{display:flex;gap:12px;align-items:center;font-weight:600}.mark{width:44px;height:44px;border-radius:12px;background:var(--pr);color:#fff;display:grid;place-items:center}
 table{width:100%;border-collapse:collapse;font-size:15px}th,td{text-align:left;padding:12px 8px;border-bottom:1px solid var(--bd);white-space:nowrap}th{color:var(--mu);font-weight:500}
@@ -1375,7 +1376,7 @@ const BillCrop = (() => {
   return { FULL, detect, flatten, turned, turnQuad, order, valid, isFull, area };
 })();
 
-const CFG={HOSPITAL_NAME:"RxPx Hospitals",CURRENCY:"₹",EXPIRY_WARNING_DAYS:7,LOW_STOCK_LIMIT:10};
+const APP_UPDATED='27 Oct 2026',CFG={HOSPITAL_NAME:"RxPx Hospitals",CURRENCY:"₹",EXPIRY_WARNING_DAYS:7,LOW_STOCK_LIMIT:10};
 // the distinctive word of the hospital name, used to tell bills the hospital issued (sales) from bills it received (purchases)
 CFG.HOSPITAL_KEY=CFG.HOSPITAL_NAME.toLowerCase().replace(/[^a-z ]/g,' ').split(/\s+/).filter(w=>w.length>=3&&!/^(hospitals?|clinic|sri|shri|sree|the|and|medical|care|centre|center|multi|speciality|specialty|super|nursing|home|health|healthcare|institute|of)$/.test(w)).sort((a,b)=>b.length-a.length)[0]||'';
 const TYPES={
@@ -1430,7 +1431,8 @@ const go=v=>{S.view=v;S.msg='';S.ask=0;render();scrollTo(0,0)};
 const IDB={db:null,open(){return this.db||(this.db=new Promise((res,rej)=>{if(!window.indexedDB)return rej(new Error('no storage'));let r,late=false;try{r=indexedDB.open('rxpx-files',1)}catch(e){return rej(e)}const t=setTimeout(()=>{late=true;rej(new Error('storage timeout'))},5000);r.onupgradeneeded=()=>r.result.createObjectStore('files');r.onsuccess=()=>{clearTimeout(t);const db=r.result;if(late)return db.close();db.onversionchange=()=>db.close();res(db)};r.onerror=()=>{clearTimeout(t);rej(r.error)}}).catch(e=>{this.db=null;throw e}))},
 async put(k,v){const db=await this.open();return new Promise((res,rej)=>{const t=db.transaction('files','readwrite');t.objectStore('files').put(v,k);t.oncomplete=()=>res(true);t.onerror=()=>rej(t.error);t.onabort=()=>rej(t.error||new Error('storage aborted'))})},
 async get(k){const db=await this.open();return new Promise((res,rej)=>{const q=db.transaction('files').objectStore('files').get(k);q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error)})},
-async del(k){const db=await this.open();return new Promise(res=>{const t=db.transaction('files','readwrite');t.objectStore('files').delete(k);t.oncomplete=()=>res(true);t.onerror=()=>res(false)})}};
+async del(k){const db=await this.open();return new Promise(res=>{const t=db.transaction('files','readwrite');t.objectStore('files').delete(k);t.oncomplete=()=>res(true);t.onerror=()=>res(false)})},
+async wipe(keep){const db=await this.open();return new Promise(res=>{const t=db.transaction('files','readwrite'),o=t.objectStore('files'),q=o.getAllKeys();q.onsuccess=()=>{for(const k of q.result)if(k!==keep)o.delete(k)};t.oncomplete=()=>res(true);t.onerror=()=>res(false);t.onabort=()=>res(false)})}};
 
 const SUN=(()=>{let s='<svg viewBox="0 0 60 46" aria-hidden="true"><circle cx="30" cy="34" r="6" fill="#F47B20"/>';[[13,2.6],[21,2.2],[29,1.7]].forEach(([r,z],k)=>{for(let a=-165;a<=-15;a+=25){const t=a*Math.PI/180;s+=`<circle cx="${(30+r*Math.cos(t)*1.05).toFixed(1)}" cy="${(34+r*Math.sin(t)).toFixed(1)}" r="${z}" fill="#F47B20" opacity="${(1-k*.28).toFixed(2)}"/>`}});return s+'</svg>'})();
 const logo=(big)=>`<span class="logo ${big?'big':''}" role="img" aria-label="${esc(CFG.HOSPITAL_NAME)}">${SUN}<span><span class="rx">R<i>x</i>P<i>x</i></span><span class="hs">HOSPITALS</span></span></span>`;
@@ -1452,9 +1454,11 @@ ${S.msg?`<p class="err">${esc(S.msg)}</p>`:''}
 
 const WARN_TEXT={no_date:'Bill date was not found on the bill.',no_number:'Bill number was not found on the bill.',total_calculated:'Total was not found, so it was added up from the items.',sum_mismatch:'The items do not add up exactly to the bill total.',items_missing:'Some items on the bill may not have been read.',total_mismatch:'The total looks unusual.',no_expiry:'{n} medicine(s) have no expiry date.',no_qty:'{n} item(s) have no quantity.'};
 const warnText=w=>{const[k,n]=String(w).split(':');return(WARN_TEXT[k]||'').replace('{n}',n||'')};
-function lastCard(){const L=S.lastUpload;if(!L)return'';const b=S.bills.find(x=>x.id==L.id);if(!b)return'';const n=(b.warnings||[]).length;
+function lastCard(){const L=S.lastUpload;if(!L)return'';const b=S.bills.find(x=>x.id==L.id);if(!b||Date.now()-new Date(b.at).getTime()>864e5)return'';const n=(b.warnings||[]).length;
 return `<section class="saved${n?' chk':''}"><button class="sv-main" data-a="open" data-id="${b.id}"><span class="ib">${ic(n?'triangle-alert':'circle-check-big')}</span><span class="sv-t"><b>${n?'Please check this bill':'Bill saved'}</b><span class="mu sm">${esc(L.impact)}</span>${L.shortage?`<span class="sm err" style="margin:2px 0 0">${esc(L.shortage)}</span>`:''}</span>${ic('chevron-right','sv-go')}</button><button class="x" data-a="dismiss" aria-label="Hide this note">${ic('x')}</button></section>`}
 
+function copiesCard(){const n=dupGroups().reduce((c,g)=>c+g.extras.length,0);if(!n)return'';
+return `<section class="saved chk"><button class="sv-main" data-a="copies"><span class="ib">${ic('copy')}</span><span class="sv-t"><b>${n} ${n==1?'bill looks':'bills look'} like a copy</b><span class="mu sm">Tap to remove ${n==1?'it':'them'}.</span></span>${ic('chevron-right','sv-go')}</button></section>`}
 const inr0=n=>CFG.CURRENCY+new Intl.NumberFormat('en-IN',{maximumFractionDigits:0}).format(Math.round(+n||0));
 // the logo's sun-dot rays, large, for the month card
 const HERO_SUN=(()=>{let s='<svg viewBox="0 0 120 66" aria-hidden="true"><circle cx="60" cy="60" r="8" fill="#F47B20"/>';[[17,2.7],[28,2.4],[39,2.1],[50,1.8]].forEach(([r,z],k)=>{for(let a=-172;a<=-8;a+=18){const t=a*Math.PI/180;s+=`<circle cx="${(60+r*Math.cos(t)*1.05).toFixed(1)}" cy="${(60+r*Math.sin(t)).toFixed(1)}" r="${z}" fill="#F47B20" opacity="${(.95-k*.2).toFixed(2)}"/>`}});return s+'</svg>'})();
@@ -1467,7 +1471,7 @@ month=now.toLocaleDateString('en-IN',{month:'long'}),day=now.toLocaleDateString(
 tile=(icon,n,label,act,tone)=>`<button class="dt${n&&tone?' is-'+tone:''}" ${act}><span class="ib">${ic(icon)}</span><b>${n}</b><span>${label}</span></button>`,
 split=(label,keys,total,none)=>{const parts=keys.map(k=>({k,v:sumOf(mb,[k])})).filter(p=>p.v>0);return `<div class="split"><div class="sp"><span>${label}</span><b class="num">${inr0(total)}</b></div>${total>0?`<div class="sbar" role="img" aria-label="${label}: ${parts.map(p=>TYPES[p.k].s+' '+inr(p.v)).join(', ')}">${parts.map(p=>`<i class="t-${p.k}" style="flex:${p.v}"></i>`).join('')}</div><div class="slegend">${parts.map(p=>`<button data-a="repgo" data-r="${p.k}"><i class="k t-${p.k}"></i>${TYPES[p.k].s}<b class="num">${inr0(p.v)}</b></button>`).join('')}</div>`:`<p class="mu sm" style="margin-top:6px">${none}</p>`}</div>`};
 return shell('home',`<header class="dhead"><div><h1>${h<12?'Good morning':h<17?'Good afternoon':'Good evening'}, ${esc(S.user.name.split(' ')[0])}</h1><div class="mu sm">${day}</div></div><button class="av" data-a="go" data-v="profile" aria-label="Profile">${esc((S.user.name[0]||'?').toUpperCase())}</button></header>
-${lastCard()}
+${lastCard()}${copiesCard()}
 ${S.bills.length?'':`<section class="card dempty"><span class="ib">${ic('file-plus-2')}</span><b>Add your first bill</b><p class="mu sm">Take a photo of a bill. The money and medicine stock update here by themselves.</p><button class="btn pri" data-a="newbill">${ic('camera')}Add a bill</button></section>`}
 <section class="hero"><div class="hero-sun">${HERO_SUN}</div><div class="hero-m">${month} so far</div><div class="hero-net num${neg?' neg':''}">${neg?'−':''}${inr0(Math.abs(net))}</div><div class="hero-cap">${neg?'more went out than came in':'left after expenses'}</div>
 <div class="hero-split" role="img" aria-label="Came in ${inr(inn)}, went out ${inr(out)}">${inn>0?`<i class="seg-in" style="flex:${inn}"></i>`:''}${out>0?`<i class="seg-out" style="flex:${out}"></i>`:''}</div>
@@ -1577,7 +1581,12 @@ function reports(){const r=S.rep,st_=r=='stock',L=st_?[...S.meds].sort(byExp):S.
 return shell('reports',`<h1>Reports</h1><div class="chips">${REPS.map(([k,l])=>`<button class="chip ${r==k?'on':''}" data-a="rep" data-r="${k}">${l}</button>`).join('')}</div>
 <div class="card" style="overflow-x:auto;padding:8px 12px">${L.length?`<table class="rtab"><tr>${st_?'<th>Medicine</th><th>Qty</th><th>Expiry</th>':'<th>Date</th><th>Name</th><th class="r">Amount</th>'}</tr>${L.map(x=>st_?`<tr><td><b>${esc(x.name)}</b><span class="mu sm">Batch ${esc(x.batch||'-')}${x.manufacture_date?' · Mfg '+fd(x.manufacture_date):''}</span></td><td class="num">${esc(fmtQty(x))}</td><td>${fd(x.expiry)}</td></tr>`:`<tr data-a="open" data-id="${x.id}"><td>${fd(x.bill_date)}</td><td><b>${esc(x.party||x.file?.name||'Scanned bill')}</b><span class="mu sm">${r=='all'?esc(TYPES[x.type]?.s||'Unclassified')+' · ':''}${esc(x.bill_number||'No bill no')}</span></td><td class="num r">${inr(x.total)}</td></tr>`).join('')}${st_?'':r=='all'?[['Revenue',L.filter(b=>REV_T.includes(b.type))],['Expenses',L.filter(b=>EXP_T.includes(b.type))],['Unclassified',L.filter(b=>!TYPES[b.type])]].filter(([,l])=>l.length).map(([n,l])=>totRow(n,l)).join(''):totRow('Total',L)}</table>`:`<p class="mu" style="padding:24px 12px;text-align:center">Nothing to show here yet. Saved bills and stock will fill this table.</p>`}</div>
 <button class="btn" data-a="export">${ic('download')}Download Excel</button><p class="note">The Excel file has a sheet for every bill type, all bill items, and medicine stock.</p>`)}
-const profile=()=>shell('profile',`<h1>Profile</h1><div class="card dl"><dt>Name</dt><dd>${esc(S.user.name)}</dd><dt>Email</dt><dd>${esc(S.user.email)}</dd><dt>Role</dt><dd>${S.user.admin?'Admin':'Staff'}</dd></div><button class="btn" data-a="out">${ic('log-out')}Sign out</button>`);
+const profile=()=>{const g=dupGroups(),extras=g.flatMap(x=>x.extras),n=extras.length;
+const copiesBox=!n?`<p class="mu sm">No copies found.</p>`:S.ask=='copies'?`<div class="card stack chk"><b>Remove ${n} ${n==1?'copy':'copies'}?</b><p class="mu sm">The first saved bill of each is kept. ${n==1?'This copy is':'These are'} removed and the stock ${n==1?'it':'they'} changed is put back:</p><ul class="cl">${extras.slice(0,4).map(b=>`<li>${esc(b.party||'Scanned bill')} · ${inr(b.total)}${b.bill_date?' · '+fd(b.bill_date):''}</li>`).join('')}${n>4?`<li>and ${n-4} more</li>`:''}</ul><div class="g2"><button class="btn" data-a="noask">Keep</button><button class="btn pri" data-a="dedupe">Remove</button></div></div>`:`<div class="warn">${ic('copy')}<div><b>${n} ${n==1?'bill looks':'bills look'} like a copy of another.</b> Usually the same bill saved twice.</div></div><button class="btn pri" data-a="copies">${ic('copy-minus')}Remove the ${n==1?'copy':'copies'}</button>`,
+wipeBox=S.ask=='wipe'?`<div class="card stack chk"><b>Delete everything?</b><p class="mu sm">All ${S.bills.length} saved ${S.bills.length==1?'bill':'bills'}, their photos and the medicine stock on this device are deleted. This cannot be undone. Download the Excel report first if you want a copy.</p><div class="g2"><button class="btn" data-a="noask">Keep</button><button class="btn pri" style="background:var(--er);border-color:var(--er)" data-a="wipe">Delete all</button></div></div>`:`<button class="btn" data-a="askwipe" ${S.bills.length||S.meds.length?'':'disabled'}>${ic('trash-2')}Delete everything and start fresh</button>`;
+return shell('profile',`<h1>Profile</h1><div class="card dl"><dt>Name</dt><dd>${esc(S.user.name)}</dd><dt>Email</dt><dd>${esc(S.user.email)}</dd><dt>Role</dt><dd>${S.user.admin?'Admin':'Staff'}</dd></div>
+<section class="card stack"><div><b>Saved bills</b><p class="mu sm" style="margin-top:4px">Bills and stock are saved on this device. Everyone who signs in here sees the same ones.</p></div>${S.msg?`<p class="err" role="alert">${esc(S.msg)}</p>`:''}${copiesBox}${wipeBox}</section>
+<button class="btn" data-a="out">${ic('log-out')}Sign out</button><p class="mu sm" style="text-align:center">RxPx Hospitals · updated ${APP_UPDATED}</p>`)};
 
 function exportReport(){
 const billRow=b=>({'Date':b.bill_date||'','Uploaded at':b.at,'Type':TYPES[b.type]?.s||'Unclassified','Bill number':b.bill_number||'','Name':b.party||b.file?.name||'Scanned bill','Reference':b.ref||'','Payment':b.mode||'','Tax':+b.tax||0,'Discount':+b.disc||0,'Total':+b.total||0,'Items':b.items.length});
@@ -1653,10 +1662,24 @@ function priorType(name){const n=String(name||'').trim().toLowerCase(),c={};for(
 const parseCtx=()=>({hospitalKey:CFG.HOSPITAL_KEY,prior:priorType(S.partyName)});
 async function fileHash(file){try{if(!crypto.subtle)return'';const h=await crypto.subtle.digest('SHA-256',await file.arrayBuffer());return[...new Uint8Array(h)].map(b=>b.toString(16).padStart(2,'0')).join('')}catch{return''}}
 const normNo=s=>String(s||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
-function findDuplicate(d,hash,party){const no=normNo(d.bill_number),tot=billAmount(d),p=party.trim().toLowerCase();
-return S.bills.find(b=>{if(hash&&b.file?.hash===hash)return true;const bn=normNo(b.bill_number),bp=(b.party||'').trim().toLowerCase(),sameTot=Math.abs((+b.total||0)-tot)<=1;
-if(no&&bn&&no==bn)return sameTot||(bp==p&&(!d.bill_date||!b.bill_date||b.bill_date==d.bill_date));
-return !no&&d.bill_date&&b.bill_date==d.bill_date&&sameTot&&bp==p&&b.items.length==d.items.length})}
+// the same paper bill: the same file, or the same bill number with the same total (or the same
+// name and date), or, when a number could not be read on one of them, the same date, total and name
+// (and the same number of items, unless the items of one of them could not be read)
+function sameBill(a,b){if(a.hash&&a.hash===b.hash)return true;const sameTot=Math.abs((+a.total||0)-(+b.total||0))<=1;
+if(a.no&&b.no)return a.no==b.no&&(sameTot||(a.p==b.p&&(!a.date||!b.date||a.date==b.date)));
+return sameTot&&a.p==b.p&&!!a.date&&a.date==b.date&&(a.n==b.n||!a.n||!b.n)}
+const billKey=b=>({hash:b.file?.hash||'',no:normNo(b.bill_number),p:(b.party||'').trim().toLowerCase(),total:b.total,date:b.bill_date,n:(b.items||[]).length});
+function findDuplicate(d,hash,party){const x={hash,no:normNo(d.bill_number),p:party.trim().toLowerCase(),total:billAmount(d),date:d.bill_date,n:d.items.length};return S.bills.find(b=>sameBill(x,billKey(b)))}
+// saved bills that copy an earlier one: the first saved of each is kept. Only bills with the same file,
+// the same number or about the same total are compared, so this stays quick with thousands of bills.
+function dupGroups(){const list=S.bills.slice().sort((a,b)=>String(a.at||'').localeCompare(String(b.at||''))),keys=list.map(billKey),tot=keys.map(k=>Math.round(+k.total||0)),by=new Map(),add=(k,i)=>{let a=by.get(k);if(!a)by.set(k,a=[]);a.push(i)};
+keys.forEach((k,i)=>{if(k.hash)add('h'+k.hash,i);if(k.no)add('n'+k.no,i);add('t'+tot[i],i)});
+const taken=new Set(),groups=[];
+for(let i=0;i<list.length;i++){if(taken.has(i))continue;const near=new Set();
+for(const key of[keys[i].hash&&'h'+keys[i].hash,keys[i].no&&'n'+keys[i].no,'t'+(tot[i]-1),'t'+tot[i],'t'+(tot[i]+1)])if(key)for(const j of by.get(key)||[])if(j>i&&!taken.has(j))near.add(j);
+const extras=[];for(const j of[...near].sort((x,y)=>x-y))if(sameBill(keys[i],keys[j])){extras.push(list[j]);taken.add(j)}
+if(extras.length)groups.push({keep:list[i],extras})}
+return groups}
 function looksLikeBill(d){const realTotal=d.total_amount!==''&&!d.warnings.includes('total_calculated');return d.items.length>0&&!!(d.bill_date||d.bill_number||realTotal)||realTotal&&!!(d.bill_number||d.bill_date)}
 const UNCLEAR='This photo is not clear enough to read. Tap Fix the frame and put the dots on the corners of the bill, or take the photo again from straight above in good light.';
 async function startRead(){const id=S.run=uid();S.step=0;S.bad=0;S.dup=null;S.ocrMessage='Opening your bill...';S.view='proc';render();
@@ -1721,7 +1744,7 @@ const all=accounts();let acc=all[key];S.busy=1;
 try{if(up){if(acc)return S.msg='An account with this email already exists on this device. Sign in instead.',render();const salt=crypto.getRandomValues(new Uint8Array(16));acc={name:a.name.trim(),email,salt:b64(salt),iter:150000};acc.hash=await pwHash(a.pw,salt,acc.iter);all[key]=acc;try{localStorage.setItem(ACCOUNTS_KEY,JSON.stringify(all))}catch{return S.msg='Could not save your account in this browser. Free some space and try again.',render()}}
 else{if(!acc)return S.msg='No account with this email on this device. Tap Create account first.',render();if(await pwHash(a.pw,unb64(acc.salt),acc.iter)!==acc.hash)return S.msg='Wrong password. Try again.',render()}}
 catch{return S.msg='Could not check the password in this browser. Try again.',render()}finally{S.busy=0}
-S.user={name:acc.name,email:acc.email,admin:true};try{localStorage.setItem(SESSION_KEY,JSON.stringify(S.user))}catch{}S.auth={name:'',email:'',pw:'',pw2:''};S.flow='choose';S.view=savedNames().length?'home':'new';S.msg='';render()},
+S.user={name:acc.name,email:acc.email,admin:true};try{localStorage.setItem(SESSION_KEY,JSON.stringify(S.user))}catch{}S.auth={name:'',email:'',pw:'',pw2:''};S.flow='choose';S.view=savedNames().length?'home':'new';S.msg='';if(S.lastUpload){S.lastUpload=null;persist()}render()},
 go(d){if(d.v=='new'){S.view='new';S.flow='choose';S.msg='';return render()}if(!['upload','proc','kind','edit'].includes(d.v))editorRelease();go(d.v)},
 newbill(){S.type='general';S.flow='choose';S.partyName='';S.selectedName='';if(S.file?.url)URL.revokeObjectURL(S.file.url);editorRelease();S.file=null;go('new')},
 backChoose(){S.flow='choose';S.msg='';render()},
@@ -1762,9 +1785,21 @@ const neg=S.meds.find(m=>(+m.qty||0)<-0.0005&&(+m.qty||0)<(+(oldMeds.find(o=>o.i
 if(!legacy)b.stock_movements=mv.movements;if(S.lastUpload?.id==b.id)S.lastUpload={...S.lastUpload,type:b.type,impact:impactOf(b,mv),shortage:shortageOf(b,mv),warnings:[]};
 S.busy=1;const ok=await persist();S.busy=0;if(!ok){S.meds=oldMeds;restoreBill(b,oldBill,file);S.msg='Could not save the changes. Free space and try again.';return render()}
 S.edit=null;S.detail=b.id;go('detail');toast(legacy?'Bill corrected. Stock was not changed because this older bill has no stock history':'Bill corrected. Stock and totals updated')},
-mf(d){S.mf=d.f;render()},medgo(d){S.mf=d.f;go('meds')},dismiss(){S.lastUpload=null;persist();render()},rep(d){S.rep=d.r;render()},repgo(d){S.rep=d.r;go('reports')},export(){exportReport()},addmed(){S.sheet=1;S.msg='';render()},closemed(){S.sheet=0;render()},
+mf(d){S.mf=d.f;render()},medgo(d){S.mf=d.f;go('meds')},dismiss(){S.lastUpload=null;persist();render()},
+copies(){S.view='profile';S.msg='';S.ask='copies';render();scrollTo(0,0)},askwipe(){S.ask='wipe';S.msg='';render()},
+async dedupe(){const extras=dupGroups().flatMap(g=>g.extras);if(!extras.length){S.ask=0;return render()}
+const oldBills=S.bills.slice(),oldMeds=S.meds.map(m=>({...m})),oldLast=S.lastUpload,gone=[],kept=[];
+for(const b of extras){const before=S.meds.map(m=>({...m})),issue=reverseStock(b);if(issue){S.meds=before;kept.push(b)}else gone.push(b)}
+S.bills=S.bills.filter(b=>!gone.includes(b));if(S.lastUpload&&gone.some(b=>b.id==S.lastUpload.id))S.lastUpload=null;
+S.busy=1;const ok=await persist();S.busy=0;if(!ok){S.bills=oldBills;S.meds=oldMeds;S.lastUpload=oldLast;S.msg='Could not save the clean-up. Free space and try again.';return render()}
+for(const b of gone){IDB.del(b.id).catch(()=>{});if(S.img[b.id]){URL.revokeObjectURL(S.img[b.id]);delete S.img[b.id]}}
+S.ask=0;S.msg=kept.length?`${kept.length} ${kept.length==1?'copy was':'copies were'} kept because the stock changed since. Open ${kept.length==1?'it':'each one'} and delete ${kept.length==1?'it':'them'} yourself.`:'';render();toast(`Removed ${gone.length} ${gone.length==1?'copy':'copies'}`)},
+async wipe(){const oldBills=S.bills,oldMeds=S.meds,oldLast=S.lastUpload;S.bills=[];S.meds=[];S.lastUpload=null;
+S.busy=1;const ok=await persist();S.busy=0;if(!ok){S.bills=oldBills;S.meds=oldMeds;S.lastUpload=oldLast;S.msg='Could not delete the saved data. Try again.';return render()}
+for(const k of Object.keys(S.img))URL.revokeObjectURL(S.img[k]);S.img={};if(DATA.idb)await IDB.wipe(DATA_KEY).catch(()=>{});
+S.ask=0;S.dup=null;go('home');toast('Everything was deleted. You can start fresh.')},rep(d){S.rep=d.r;render()},repgo(d){S.rep=d.r;go('reports')},export(){exportReport()},addmed(){S.sheet=1;S.msg='';render()},closemed(){S.sheet=0;render()},
 async savemed(){const fm=S.mform,n=fm.name.trim(),q=parseNumber(fm.qty);if(!n||!(q>0))return S.msg='Please add the medicine name and a quantity.',render();const k=medKey(n),bt=normBatch(fm.batch),m=S.meds.find(x=>sameMed(keyOf(x),k)&&normBatch(x.batch)==bt),oldMeds=S.meds.map(x=>({...x}));if(m){m.qty=r3((+m.qty||0)+q);m.manufacture_date=fm.manufacture_date||m.manufacture_date;m.expiry=fm.expiry||m.expiry}else S.meds.push({id:uid(),name:n,key:k,batch:bt,qty:q,pack_n:'',mrp:'',manufacture_date:fm.manufacture_date,expiry:fm.expiry,supplier:fm.supplier.trim()});S.busy=1;const ok=await persist();S.busy=0;if(!ok){S.meds=oldMeds;return S.msg='Could not save medicine in browser storage. Free space and try again.',render()}S.mform={name:'',batch:'',qty:'',manufacture_date:'',expiry:'',supplier:''};S.sheet=0;render();toast('Medicine added')},
-out(){try{localStorage.removeItem(SESSION_KEY)}catch{}S.user=null;S.auth={name:'',email:'',pw:'',pw2:''};go('login')}};
+out(){try{localStorage.removeItem(SESSION_KEY)}catch{}S.user=null;S.mode='in';S.auth={name:'',email:'',pw:'',pw2:''};go('login')}};
 document.addEventListener('click',e=>{const a=e.target.closest('[data-a]');if(a&&A[a.dataset.a]&&!a.disabled&&!S.busy)A[a.dataset.a](a.dataset)});
 document.addEventListener('input',e=>{const k=e.target.dataset.k;if(!k)return;const p=k.split('.');if(p.length==1)S[p[0]]=e.target.value;else{let o=S[p[0]];for(let j=1;j<p.length-1;j++)o=o[p[j]];o[p[p.length-1]]=e.target.value}if(k=='partyName'){const button=$('[data-a="continueName"]');if(button)button.disabled=!e.target.value.trim();saveFlow()}
 if(e.target.dataset.re)render();

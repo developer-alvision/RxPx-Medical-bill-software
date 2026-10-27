@@ -5,6 +5,8 @@
 > **Photos on this page:** after a photo is chosen it opens in a small editor. An orange frame is put on the bill's corners by itself; drag a dot to fix a corner (a magnifier shows under the finger), use **Turn left** / **Turn right**, **Fit to bill** or **Whole photo**. The bill inside the frame is flattened and straightened before it is read, and that flattened copy is kept with the saved bill. Text outside the frame (the table, other papers) is never read.
 >
 > **Camera and gallery:** some in-app viewers cannot open the camera or the file picker. When a tap on an option opens nothing on an Android phone, the page says so; open the link in a browser such as Chrome instead.
+>
+> **Saved bills:** bills and stock are kept in the browser of the device and are shared by everyone who signs in on it, so each login shows the same bills. **Profile → Saved bills** removes bills that look like copies of another (the first saved is kept and the stock they changed is put back) or deletes everything on the device to start fresh. The dashboard says when it finds copies. The bottom of Profile shows when this copy of the app was last updated.
 
 Read hospital bills, review extracted values, and save **data only** to each signed-in account's Supabase database. Source images, PDFs, Excel workbooks, and CSV files are used temporarily for extraction and are **not saved**. The app uses **Indian rupees (₹ / INR) only**.
 

@@ -1,7 +1,7 @@
 /* Browser checks for the page the app runs ('medical bills.html'): accounts, saved data,
  * reading photo / PDF / Excel bills, the photo editor (frame on the bill's corners, turn),
  * the upload options and photo editor on a small phone screen, stock in and out, expired batches,
- * duplicates, edits, deletes, reports, export and two open tabs.
+ * duplicates and their clean-up, edits, deletes, starting fresh, reports, export and two open tabs.
  * Run: node tests/page-app.test.cjs
  * Needs Playwright with Chromium (or PLAYWRIGHT_PACKAGE) and internet access for the page's
  * CDN libraries. Offline: set RXPX_CDN_DIR to a node_modules folder holding lucide@0.469.0,
@@ -311,6 +311,44 @@ ${['left:0;top:0', 'right:0;top:0', 'right:0;bottom:0', 'left:0;bottom:0'].map(p
     const csvDownload = page.waitForEvent('download');
     await page.evaluate(() => { const x = window.XLSX; window.XLSX = undefined; try { exportReport(); } finally { window.XLSX = x; } });
     ok(fs.readFileSync(await (await csvDownload).path(), 'utf8').includes(`"'=HYPERLINK(`), 'CSV export does not create formulas');
+
+    console.log('Copies and starting fresh');
+    // a copy of a saved bill, as an earlier version let through (the check is bypassed on purpose)
+    const doloQty = () => S('S.meds.find(m=>m.batch=="DL6243").qty');
+    const was = { bills: await S('S.bills.length'), dolo: await doloQty() };
+    ok(!(await S('dupGroups().length')), 'the saved bills so far hold no copies');
+    await page.evaluate(() => { const c = JSON.parse(JSON.stringify(S.bills.find(b => b.bill_number == 'LMA-4471'))); c.id = uid(); c.at = new Date(Date.now() + 5000).toISOString(); c.file = null; c.stock_movements = stock(c).movements; S.bills.unshift(c); return persist(); });
+    ok(await doloQty() > was.dolo && await S('S.bills.length') === was.bills + 1, 'set up: a copy of a purchase bill, its stock counted twice');
+    const mine = await S('billKey(S.bills.find(b=>b.bill_number=="LMA-4471"))');
+    ok(await page.evaluate(k => sameBill({ ...k, no: '', n: 0, hash: 'other' }, k), mine), 'a photo where the bill number and the items could not be read is still seen as a copy');
+    ok(await page.evaluate(k => !sameBill({ ...k, no: 'LMA9999', hash: 'other' }, k) && !sameBill({ ...k, no: '', date: '2026-01-02', hash: 'other' }, k), mine), 'another bill number, or another date, is another bill');
+    await page.evaluate(() => go('home'));
+    ok(/1 bill looks like a copy/.test(await text()), 'the dashboard says one bill looks like a copy');
+    await page.click('[data-a="copies"]');
+    ok(/Remove 1 copy\?/.test(await text()) && await S('S.view') === 'profile', 'tapping it opens Profile and asks before removing');
+    await page.click('[data-a="noask"]');
+    ok(await S('S.bills.length') === was.bills + 1, 'Keep leaves the copy');
+    await page.click('[data-a="copies"]');
+    await page.click('[data-a="dedupe"]');
+    await page.waitForFunction(() => !S.busy && !dupGroups().length);
+    ok(await S('S.bills.length') === was.bills && await doloQty() === was.dolo, 'removing the copy puts its stock back');
+    ok(/No copies found/.test(await text()) && /updated 27 Oct 2026/.test(await text()), 'Profile says no copies are left, and which version of the app is open');
+    // the "Bill saved" note belongs to the moment of saving, not to every later sign-in
+    await typed('Tea Stall', { type: 'expense', bill_number: 'N-1', total: '10', items: [{ description: 'Tea', quantity: 1, amount: '10' }] });
+    ok(!!(await S('S.lastUpload')), 'a saved bill leaves the Bill saved note');
+    await auth('in', { email: 'staff@rxpx.test', pw: 'secret123' });
+    ok(!(await S('S.lastUpload')) && !(await page.$('.saved')) && await S('S.bills.length') === was.bills + 1, 'it is gone at the next sign-in, and the bills stay');
+    await page.evaluate(() => go('profile'));
+    await page.click('[data-a="askwipe"]');
+    ok(/Delete everything\?/.test(await text()), 'Delete everything asks first');
+    await page.click('[data-a="noask"]');
+    ok(await S('S.bills.length') === was.bills + 1, 'Keep leaves the bills');
+    await page.click('[data-a="askwipe"]');
+    await page.click('[data-a="wipe"]');
+    await page.waitForFunction(() => !S.busy && !S.bills.length && S.view === 'home');
+    const keys = await page.evaluate(async () => { const db = await IDB.open(); return new Promise(r => { const q = db.transaction('files').objectStore('files').getAllKeys(); q.onsuccess = () => r(q.result); }); });
+    ok(!(await S('S.meds.length')) && keys.length === 1 && keys[0] === '__rxpx_data__', 'everything is deleted: bills, stock, saved photos and older copies');
+    ok(/Add your first bill/.test(await text()) && !!(await S('S.user')), 'the dashboard asks for the first bill, and the account still works');
 
     console.log('Two tabs');
     const second = await context.newPage();
