@@ -1,7 +1,7 @@
 'use strict';
 // The bill reader inside 'medical bills.html' (the page the app actually runs), checked on
-// Tesseract output for six bill types, plus receipts with the print around their items and the
-// corner maths of the photo editor. Run: node --test tests/page-reader.test.cjs
+// Tesseract output for six bill types and a phone photo of a GST invoice, plus receipts with the print
+// around their items and the corner maths of the photo editor. Run: node --test tests/page-reader.test.cjs
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -236,4 +236,87 @@ Sl Particulars              Qty   Rate    Amount
 Total                                     750.00`);
   assert.deepEqual(d.items.map(i => i.description), ['Phenyl 5 Ltr Can', 'Register Book', 'Ball Pens Blue']);
   assert.ok(d.warnings.some(w => w === 'total_calculated' || w === 'sum_mismatch'), 'the mismatch is shown for checking instead');
+});
+
+// One phone photo of a printed GST purchase invoice, as the reader saw it (names, phones, licence numbers,
+// GSTIN and the invoice number replaced). See tests/fixtures/page-ocr-photo-invoice.json.
+const photo = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'page-ocr-photo-invoice.json'), 'utf8'));
+const readDoc = doc => JSON.parse(JSON.stringify(BillParser.parse(doc, { hospitalKey: 'rxpx', today: '2026-10-29' })));
+
+test('photo of a GST purchase invoice, corners framed: every field the paper shows', () => {
+  const d = readDoc(photo.docs.framed);
+  assert.deepEqual([d.type, d.bill_number, d.bill_date, d.payment_mode, d.total_amount, d.tax_amount], ['medicine_purchase', 'SD00518', '2026-05-08', 'Credit', 6163, 293.49]);
+  assert.deepEqual(d.warnings, []);
+  // the "Expr" column, the HSN code kept out of the name, and the NOTE line and tax-slab table left out
+  assert.deepEqual(d.items.map(i => [i.description, i.batch_no, i.expiry_date, i.quantity, i.free, i.pack, i.mrp, i.rate, i.gst, i.amount]), [
+    ['SURBEX GOLD-CAP', 'SFL0013', '2026-09-30', 25, 5, '1X15', 308.17, 234.79, 5, 5869.75],
+  ]);
+});
+
+test('the same invoice read as a whole photo: a garbled heading hides the number and date, and a second look at that strip finds them', () => {
+  const d = readDoc(photo.docs.whole_first);
+  assert.deepEqual([d.bill_number, d.bill_date, d.total_amount, d.tax_amount], ['', '', 6163, 293.49]);
+  assert.deepEqual([...d.warnings].sort(), ['no_date', 'no_number']);
+  assert.deepEqual(d.items.map(i => [i.description, i.quantity, i.free, i.expiry_date]), [['SURBEX GOLD-CAP', 25, 5, '2026-09-30']]); // "29" read, 25 x 234.79 = 5869.75
+  assert.ok(d.layout && d.layout.headY === photo.headY && d.layout.footY > d.layout.headY && d.layout.hasExp, JSON.stringify(d.layout));
+  // what the page's closer look does: the strip above the item table, read again, replaces those lines
+  const mid = l => l.toks.reduce((s, t) => s + (t.y0 + t.y1) / 2, 0) / l.toks.length;
+  const lines = [...photo.docs.whole_first.lines.filter(l => mid(l) >= d.layout.headY - 4), ...photo.docs.top_strip.lines].sort((a, b) => mid(a) - mid(b));
+  const again = readDoc({ source: 'ocr', lines });
+  assert.deepEqual([again.bill_number, again.bill_date, again.payment_mode, again.total_amount, again.tax_amount, again.warnings], ['SD00518', '2026-05-08', 'Credit', 6163, 293.49, []]);
+});
+
+test('GST invoice laid out like a distributor\'s: slab table and notes are not items, CGST/SGST are not added twice, words give the total', () => {
+  const inv = (o = {}) => `
+             SAMPLE DISTRIBUTORS
+     12/34 M.G. ROAD, TOWNVILLE-500001
+     Ph : 9000000000     DL Nos:20B:00/XX/W/00
+To : RX PX PHARMA                       INVOICE No : SD00518
+TOWNVILLE                               INVOICE Date : 08/05/2026
+                                        ${o.type ?? 'Type : Credit'}
+MFG HSNCODE Product Name        Pack  Batch    Expr  Qty Free   M.R.P    Rate   Amount GST
+ABM  328.71 SURBEX GOLD-CAP    1X15  SFL0013  09/26  25    5  308.17  234.79  5869.75   5
+NOTE : +1c/b auto+
+              0%      5%   12%   18%   28%
+TAXABLE :   0.00 5869.75  0.00  0.00  0.00   ADJ: 0.00   SubTotal : 5869.75
+CGST    :   0.00  146.75  0.00  0.00  0.00   ROUND: -0.24  Less Disc: 0.00
+SGST    :   0.00  146.75  0.00  0.00  0.00   Gst Amt : ${o.gst ?? '293.49'}
+Six Thousand One Hundred Sixty Three Rupees Only   NET PAYABLE: ${o.net ?? '6163.00'}
+${o.paid ?? ''}
+The goods supplied in this invoice do not contravene section 18 of the drugs & cosmetics act 1940.
+OUR SOFTWARE BILLSOFT 040 00000000       For SAMPLE DISTRIBUTORS`;
+  const d = readText(inv());
+  assert.deepEqual([d.type, d.bill_number, d.bill_date, d.payment_mode, d.total_amount, d.tax_amount, d.warnings], ['medicine_purchase', 'SD00518', '2026-05-08', 'Credit', 6163, 293.49, []]);
+  assert.deepEqual(d.items.map(i => [i.description, i.batch_no, i.expiry_date, i.quantity, i.free, i.amount]), [['SURBEX GOLD-CAP', 'SFL0013', '2026-09-30', 25, 5, 5869.75]]);
+  // "293.49" read as "295.49": sub-total, round-off and total agree on 293.49 (CGST + SGST alone make 293.50)
+  assert.equal(readText(inv({ gst: '295.49' })).tax_amount, 293.49);
+  // net payable read in pieces: the amount in words decides
+  assert.equal(readText(inv({ net: '61 63 00' })).total_amount, 6163);
+  // payment: the printed sale type, or "PAID GPAY" written on the bill
+  assert.deepEqual(['Type : Credit', 'Type : Cash', ''].map(type => readText(inv({ type })).payment_mode), ['Credit', 'Cash', '']);
+  assert.equal(readText(inv({ paid: 'PAID GPAY' })).payment_mode, 'UPI');
+});
+
+test('an HSN or item code printed in front of the medicine name is kept out of the name', () => {
+  const d = readText(`
+Invoice No: T-100   Date: 02/10/2026
+Product Name                 Batch    Exp    Qty   Rate    Amount
+30049099 DOLO 650 TAB        DL6243   08/28   10   20.00   200.00
+3004.90 PAN 40 TAB           P40X921  11/27    5   30.00   150.00
+1000 ML NS BOTTLE            NS2231   04/28    2   45.00    90.00
+Total                                                      440.00`);
+  assert.deepEqual(d.items.map(i => [i.description, i.hsn || '']), [['DOLO 650 TAB', '30049099'], ['PAN 40 TAB', '3004.90'], ['1000 ML NS BOTTLE', '']]);
+});
+
+test('amount in words, with "Rupees" before or after the words', () => {
+  const cases = {
+    'Six Thousand One Hundred Sixty Three Rupees Only': 6163,
+    'Rupees Six Thousand One Hundred Sixty Three Only': 6163,
+    'Six Thousnd One Hundrd Sixty Three Rupees Only': 6163, // misread letters
+    'Amount in words: Two Lakh Five Thousand Rupees Only': 205000,
+    'Twelve Rupees and Five Paise Only': 12.05,
+    'Rupees One Thousand Two Hundred Fifty and Fifty Paise Only': 1250.5,
+    'Thank you Rupees Only': '',
+  };
+  for (const [text, want] of Object.entries(cases)) assert.equal(BillParser.wordsAmount(text), want, text);
 });

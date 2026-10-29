@@ -1,7 +1,8 @@
 /* Browser checks for the page the app runs ('medical bills.html'): accounts, saved data,
  * reading photo / PDF / Excel bills, the photo editor (frame on the bill's corners, turn),
  * the upload options and photo editor on a small phone screen, stock in and out, expired batches,
- * duplicates and their clean-up, edits, deletes, starting fresh, reports, export and two open tabs.
+ * duplicates and their clean-up, edits, deletes, starting fresh, reports, export, the second look at
+ * a hard photo with the note after saving, and two open tabs.
  * Run: node tests/page-app.test.cjs
  * Needs Playwright with Chromium (or PLAYWRIGHT_PACKAGE) and internet access for the page's
  * CDN libraries. Offline: set RXPX_CDN_DIR to a node_modules folder holding lucide@0.469.0,
@@ -349,7 +350,7 @@ ${['left:0;top:0', 'right:0;top:0', 'right:0;bottom:0', 'left:0;bottom:0'].map(p
     await page.click('[data-a="dedupe"]');
     await page.waitForFunction(() => !S.busy && !dupGroups().length);
     ok(await S('S.bills.length') === was.bills && await doloQty() === was.dolo, 'removing the copy puts its stock back');
-    ok(/No copies found/.test(await text()) && /updated 27 Oct 2026/.test(await text()), 'Profile says no copies are left, and which version of the app is open');
+    ok(/No copies found/.test(await text()) && /updated 29 Oct 2026/.test(await text()), 'Profile says no copies are left, and which version of the app is open');
     // the "Bill saved" note belongs to the moment of saving, not to every later sign-in
     await typed('Tea Stall', { type: 'expense', bill_number: 'N-1', total: '10', items: [{ description: 'Tea', quantity: 1, amount: '10' }] });
     ok(!!(await S('S.lastUpload')), 'a saved bill leaves the Bill saved note');
@@ -366,6 +367,47 @@ ${['left:0;top:0', 'right:0;top:0', 'right:0;bottom:0', 'left:0;bottom:0'].map(p
     const keys = await page.evaluate(async () => { const db = await IDB.open(); return new Promise(r => { const q = db.transaction('files').objectStore('files').getAllKeys(); q.onsuccess = () => r(q.result); }); });
     ok(!(await S('S.meds.length')) && keys.length === 1 && keys[0] === '__rxpx_data__', 'everything is deleted: bills, stock, saved photos and older copies');
     ok(/Add your first bill/.test(await text()) && !!(await S('S.user')), 'the dashboard asks for the first bill, and the account still works');
+
+    console.log('A second look at a hard photo, and the note after saving');
+    // the reader engine is swapped for what it read on a real phone photo of a GST invoice (tests/fixtures/page-ocr-photo-invoice.json)
+    const invoice = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'page-ocr-photo-invoice.json'), 'utf8'));
+    await page.evaluate(fx => {
+      window.__realOcr = ocrCanvas; window.__mode = 'helps'; window.__calls = [];
+      window.ocrCanvas = async (canvas, label) => {
+        window.__calls.push({ h: canvas.height, label });
+        const m = window.__mode, closer = /Looking closer/.test(label);
+        const lines = m === 'complete' ? fx.docs.framed.lines : !closer ? fx.docs.whole_first.lines
+          : m === 'helps' && /top of the bill/.test(label) ? fx.docs.top_strip.lines : [{ toks: [{ t: '~~', x0: 10, x1: 40, y0: 20, y1: 44, c: 30 }] }];
+        return { conf: 82, lines: JSON.parse(JSON.stringify(lines)) };
+      };
+    }, invoice);
+    const look = mode => page.evaluate(async m => {
+      window.__mode = m; window.__calls = [];
+      const prepare = BillImage.prepare;
+      BillImage.prepare = () => { const c = document.createElement('canvas'); c.width = 3200; c.height = 1600; return c; };
+      const src = document.createElement('canvas'); src.width = 800; src.height = 400;
+      const id = S.run = 'look-' + m;
+      try { const best = await readPhoto(src, id, {}); return { d: JSON.parse(JSON.stringify(best.d)), lines: best.r.lines.length, calls: window.__calls }; } finally { BillImage.prepare = prepare; S.run = 0; }
+    }, mode);
+    const helped = await look('helps');
+    ok(helped.calls.length === 2 && /top of the bill/.test(helped.calls[1].label) && helped.calls[1].h === invoice.headY - 4, 'a read without the bill number and date reads the strip above the items again, once');
+    ok(helped.d.bill_number === 'SD00518' && helped.d.bill_date === '2026-05-08' && helped.d.payment_mode === 'Credit' && helped.d.total_amount === 6163 && helped.d.items.length === 1 && !helped.d.warnings.length, 'and keeps the number, date and payment found there');
+    const worse = await look('worse');
+    ok(worse.calls.length === 2 && worse.d.bill_number === '' && worse.lines === invoice.docs.whole_first.lines.length && worse.d.total_amount === 6163, 'a second look that reads worse is not used');
+    const complete = await look('complete');
+    ok(complete.calls.length === 1 && complete.d.bill_number === 'SD00518', 'a complete first read is not read again');
+    await page.evaluate(() => { window.__mode = 'helps'; });
+    await upload('Sample Distributors', '#f2', 'invoice.png', 'image/png', files.purchase, 'medicine_purchase');
+    const note = (await page.$eval('.saved', e => e.innerText)).replace(/\s+/g, ' ');
+    ok(/Bill saved/.test(note) && note.includes('Added to expenses (May 2026): ₹6,163 · Stock added: 30 packs of SURBEX GOLD-CAP'), 'the note names the month the expense went to, and the packs that came in');
+    ok(/SURBEX GOLD-CAP is past its expiry date \(Sept? 2026\)\./.test(note), 'and says the batch is already past its expiry date');
+    await page.click('.saved [data-a="open"]');
+    const billText = (await text()).replace(/\s+/g, ' ');
+    ok(/SD00518/.test(billText) && /8 May 2026/.test(billText) && /Credit/.test(billText) && /₹293\.49/.test(billText) && /₹6,163/.test(billText), 'the bill shows its number, date, payment, tax and total as printed');
+    ok(/25 packs \+ 5 free · batch SFL0013 · Exp Sept? 2026 Expired/.test(billText) && billText.includes('Pack 1X15 · MRP ₹308.17 · Rate ₹234.79 · GST 5%'), 'the item shows quantity, free packs, batch, expiry, pack, MRP, rate and GST');
+    ok(await page.evaluate(() => reasonsOf(['no_date', 'no_number', 'no_expiry:2', 'no_qty:1'])) === 'Date and bill number not found · 2 medicines without an expiry date · 1 item without a quantity', 'a bill to check says why in words');
+    ok(await page.evaluate(() => impactOf({ type: 'medicine_purchase', bill_date: thisMonth() + '-02', total: 120 }, { added: 1, removed: 0, movements: [{ direction: 'in', name: 'DOLO 650 TAB' }], shortage: [] })) === 'Added to expenses: ₹120 · Stock added: 1 pack of DOLO 650 TAB', 'a bill of this month needs no month name, and one pack is "1 pack"');
+    await page.evaluate(() => { window.ocrCanvas = window.__realOcr; go('home'); });
 
     console.log('Two tabs');
     const second = await context.newPage();

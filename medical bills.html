@@ -184,6 +184,7 @@ select.inp{appearance:none;-webkit-appearance:none;background:var(--cd) url("dat
 .saved.chk{background:hsl(var(--warning)/.1);border-color:hsl(var(--warning)/.4)}
 .saved .ib{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:var(--cd);color:var(--ok);flex:none}
 .saved.chk .ib{color:var(--wn)}
+.saved .why{color:var(--fg);font-weight:500}
 .saved .x{width:40px;height:40px;display:grid;place-items:center;border-radius:50%;color:var(--mu);flex:none}
 .dgrid{display:grid;gap:12px}
 .dcard{padding:16px;border-radius:20px}
@@ -337,7 +338,7 @@ const BillParser = (() => {
     hsn: 'hsn hsncode hsnsac sac hsnsaccode hsnno',
     mfr: 'mfr mfgco company mkt manufacturer mfrs comp mfrname mkdby',
     batch: 'batch batchno bno batchnumber lot lotno btno batchn0',
-    exp: 'exp expiry expdt expdate expirydate expd usebefore exdt expiry dt',
+    exp: 'exp expr expry expiry expdt exprdt expdate expirydate expd usebefore exdt expiry dt',
     mfg: 'mfg mfgdate mfd mfgdt manufacturedate manufacturingdate mfddate',
     qty: 'qty qnty quantity qtydays daysqty days nos units pcs saleqty billedqty noofunits unitsqty qtynos qtys qy',
     free: 'free fr sch scheme bonus freeqty schqty',
@@ -430,10 +431,10 @@ const BillParser = (() => {
     return letters(rest) <= 3;
   }
   const SEP = /^[-=_.*~\s]{3,}$/;
-  const FOOTER = /\b(?:taxable\s*(?:value|amount|amt)|sub\s*-?\s*total|grand\s*total|net\s*payable|total\s*qty|total\s*quantity|total\s*items|no\.?\s*of\s*items|amount\s*in\s*words|round\s*off|total\s*gst|total\s*tax|e\s*&\s*o\.?\s*e)\b|\bitems?\s*:\s*\d|^\W*[il1|\[]?tems?\s*:\s*\d/i;
+  const FOOTER = /\b(?:taxable\s*(?:value|amount|amt)|sub\s*-?\s*total|grand\s*total|net\s*payable|total\s*qty|total\s*quantity|total\s*items|no\.?\s*of\s*items|amount\s*in\s*words|round\s*off|total\s*gst|total\s*tax|e\s*&\s*o\.?\s*e)\b|\bitems?\s*:\s*\d|^\W*[il1|\[]?tems?\s*:\s*\d|\b(?:round|adj|less\s*disc)\s*:\s*[-−]?\d/i;
   // print around the items that is never an item: licence and tax numbers, contact and bank
   // details, terms, greetings and signatures
-  const JUNK = /\b(?:gstin|gst\s*(?:no|reg)|d\.?\s*l\.?\s*no|drug\s*lic\w*|fssai|cin\s*:|ph(?:one)?\s*(?:no\.?)?\s*:|mob(?:ile)?\s*(?:no\.?)?\s*:|cell\s*:|tel\s*:|e-?mail|www\.|a\s*\/\s*c\s*no|account\s*no|ifsc|bank\s*:|terms|conditions|goods\s*once|once\s*sold|taken\s*back|jurisdiction|signature|signatory|authori[sz]ed|thank\s*you|visit\s*again|get\s*well|wishing|lab\s*timings?|timings\s*:|pharmacist|declaration|we\s*declare|you\s*saved|check\s*expiry|balance\s*:)\b|\b[\w.+-]+@[a-z0-9-]+\.[a-z]{2,}\b/i;
+  const JUNK = /\b(?:gstin|gst\s*(?:no|reg)|d\.?\s*l\.?\s*no|drug\s*lic\w*|fssai|cin\s*:|ph(?:one)?\s*(?:no\.?)?\s*:|mob(?:ile)?\s*(?:no\.?)?\s*:|cell\s*:|tel\s*:|e-?mail|www\.|a\s*\/\s*c\s*no|account\s*no|ifsc|bank\s*:|terms|conditions|goods\s*once|once\s*sold|taken\s*back|jurisdiction|signature|signatory|authori[sz]ed|thank\s*you|visit\s*again|get\s*well|wishing|lab\s*timings?|timings\s*:|pharmacist|declaration|we\s*declare|you\s*saved|check\s*expiry|balance\s*:)\b|\b[\w.+-]+@[a-z0-9-]+\.[a-z]{2,}\b|^\W*note\s*:|\bour\s+software\b/i;
   // a total or discount label with one letter misread ("ross Amount", "Jiscount", "Net Arnount")
   const NEAR_SUM = ['subtotal', 'grossamount', 'grosstotal', 'grandtotal', 'netamount', 'netpayable', 'nettotal', 'discount', 'roundoff', 'totalqty', 'totalamount', 'billamount', 'amountpayable', 'taxableamount', 'taxablevalue', 'yousaved'];
   function nearSummary(text) {
@@ -476,14 +477,25 @@ const BillParser = (() => {
     it.mrp = mny('mrp'); it.rate = mny('rate'); it.amount = mny('amount');
     const pct = k => { const t = cellText(cells, k).replace('%', ''); const v = num(t.split(' ').pop()); return v === '' ? '' : v };
     it.disc = pct('disc'); it.gst = pct('gst');
-    it.batch_no = (cells.batch || []).map(t => t.t).join('').toUpperCase().replace(/[^A-Z0-9\-\/]/g, '');
+    it.batch_no = (cells.batch || []).filter(t => !/^(?:0?[1-9]|1[0-2])[\/\-.]\d{2}$/.test(t.t)).map(t => t.t).join('').toUpperCase().replace(/[^A-Z0-9\-\/]/g, '');
     it.expiry_date = parseMonthDate(cellText(cells, 'exp'), true);
     const mfgT = cellText(cells, 'mfg');
     it.manufacture_date = parseMonthDate(mfgT, false);
+    if (!it.expiry_date) { // a "09/26" under a heading that was not recognised: take the date from the row itself
+      const seen = [];
+      for (const [k, ts] of Object.entries(cells)) if (!['desc', 'pack', 'mfg', 'rate', 'mrp', 'amount'].includes(k)) for (const t of ts) {
+        if (!/^(?:0?[1-9]|1[0-2])\s?[\/\-.]\s?(?:\d{2}|20\d{2})$/.test(t.t)) continue;
+        const v = parseMonthDate(t.t, true); if (v >= '2020-01-01' && v <= '2049-12-31') seen.push(v);
+      }
+      seen.sort();
+      if (seen.length) { it.expiry_date = seen[seen.length - 1]; if (!it.manufacture_date && seen.length > 1) it.manufacture_date = seen[0].slice(0, 8) + '01' }
+    }
     it.pack = cellText(cells, 'pack');
     // name: tidy, take inline batch/expiry/pack if the bill has no column for them
     let words = desc.split(/\s+/).filter(Boolean);
     if (!cols.has('sno') && words.length > 1 && /^\d{1,3}[.)]?$/.test(words[0]) && !UNIT_WORD.test(words[1])) words.shift();
+    // an HSN or item code in front of the name ("328.71 SURBEX GOLD-CAP") is not part of the name
+    if (words.length > 1 && /^\d{3,8}(?:\.\d{1,2})?$/.test(words[0]) && (words[0].includes('.') || words[0].length >= 4) && letters(words[1]) >= 2 && !UNIT_WORD.test(words[1]) && !FORM.test(words[1])) it.hsn = words.shift();
     const keep = [];
     for (const w of words) {
       const exp = /^(?:exp|e)[:.]?(.+)$/i.exec(w), bt = /^(?:b|batch|bno)[:.](.+)$/i.exec(w);
@@ -613,6 +625,7 @@ const BillParser = (() => {
       const l = lines[i];
       if (SEP.test(l.text) || !l.toks.length) continue;
       if (isSummary(l.text) || FOOTER.test(l.text) && !l.toks.some(t => /^\d{1,2}[\/\-.]\d{2,4}$/.test(t.t))) { endAt = i; break }
+      if (items.length && l.toks.filter(t => /^\d{1,2}(?:\.\d+)?%$/.test(t.t)).length >= 3) { endAt = i; break } // the tax-slab table ("0% 5% 12% 18% 28%"), never an item
       if (JUNK.test(l.text) || items.length && nearSummary(l.text)) { if (items.length) { endAt = i; break } continue }
       const toks = l.toks.filter(t => mid(t) >= left && mid(t) <= right);
       if (!toks.length) continue;
@@ -724,13 +737,18 @@ const BillParser = (() => {
   const W1 = { zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19, twenty: 20, thirty: 30, forty: 40, fourty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90 };
   const SCALE = { thousand: 1e3, lakh: 1e5, lakhs: 1e5, lac: 1e5, lacs: 1e5, crore: 1e7, crores: 1e7, million: 1e6 };
   function wordsAmount(text) {
-    const m = String(text).match(/rupees?\s+([a-z\s\-]+?)(?:\s+and\s+([a-z\s\-]+?)\s+paise)?\s+only\b/i);
-    if (!m) return '';
     const fix = w => { if (W1[w] !== undefined || SCALE[w] || w === 'hundred' || w === 'and' || w.length < 4) return w; let b = w, bd = 9; for (const k of [...Object.keys(W1), ...Object.keys(SCALE), 'hundred']) { const d = lev(w, k); if (d < bd) { bd = d; b = k } } return bd <= (w.length >= 7 ? 2 : 1) ? b : w };
     const conv = str => { let total = 0, cur = 0, any = false; for (const w0 of str.toLowerCase().split(/[\s\-]+/).filter(Boolean)) { const w = fix(w0); if (w === 'and') continue; if (W1[w] !== undefined) { cur += W1[w]; any = true } else if (w === 'hundred') { cur = (cur || 1) * 100; any = true } else if (SCALE[w]) { total += (cur || 1) * SCALE[w]; cur = 0; any = true } else return null } return any ? total + cur : null };
-    const r = conv(m[1]); if (r === null || r <= 0) return '';
-    const p = m[2] ? conv(m[2]) : 0;
-    return round2(r + (p || 0) / 100);
+    const isNum = w => { const x = fix(w.toLowerCase()); return W1[x] !== undefined || !!SCALE[x] || x === 'hundred' || x === 'and' };
+    const amount = (rs, ps) => { const r = conv(rs); if (r === null || r <= 0) return ''; const p = ps ? conv(ps) : 0; return round2(r + (p || 0) / 100) };
+    const s = String(text);
+    let m = s.match(/rupees?\s+([a-z\s\-]+?)(?:\s+and\s+([a-z\s\-]+?)\s+paise)?\s+only\b/i); // "Rupees Six Thousand Five Hundred Only"
+    if (m) { const v = amount(m[1], m[2]); if (v !== '') return v }
+    m = s.match(/((?:[a-z\-]+\s+){1,16})rupees?(?:\s+and\s+((?:[a-z\-]+\s+){1,4}?)paise)?\s+only\b/i); // "Six Thousand One Hundred Sixty Three Rupees Only"
+    if (!m) return '';
+    const ws = m[1].trim().split(/\s+/); let k = ws.length;
+    while (k > 0 && isNum(ws[k - 1])) k--;
+    return amount(ws.slice(k).join(' '), m[2] ? m[2].trim() : '');
   }
 
   /* ---------- bill-level fields ---------- */
@@ -821,24 +839,66 @@ const BillParser = (() => {
     }
     if (at >= 0) for (let i = lines.length - 1; i > at; i--) { const m = lines[i].text.match(PRI[1]); if (!m) continue; const v = labelMoney(lines[i].text, m.index + m[0].length); if (v !== '' && v !== total && Math.abs(v - total) <= 1) { total = v; break } }
     for (let i = from; i < lines.length; i++) { const m = lines[i].text.match(/\b(?:sub\s*-?\s*total|gross\s*(?:amount|amt|total|value)|taxable\s*(?:amount|value))\b/i); if (m) { const v = firstMoneyAfter(lines[i].text, m.index + m[0].length); if (v !== '') sub = v } }
-    let tax = 0, taxSeen = false;
+    // tax is kept in parts: the printed total ("Gst Amt"), a single "GST" line, and CGST / SGST rows. A slab table
+    // prints the same tax both ways, so adding every line counts it twice; parse() picks what the bill's figures agree with.
+    const tx = { total: [], plain: [], splitFirst: 0, splitAll: 0 };
+    const sumAfter = (t, at) => { // every amount right of a label, up to the next label word
+      const toks = t.slice(at).split(/\s+/).filter(Boolean); let s = 0;
+      for (let i = 0; i < toks.length; i++) { const w = toks[i]; if (isPct(w) || /^@/.test(toks[i - 1] || '')) continue; if (letters(w) >= 3) break; const m = money(w); if (m && (m.dot || m.v >= 1)) s += m.v }
+      return round2(s);
+    };
     for (let i = from; i < lines.length; i++) {
       const t = lines[i].text.replace(/\([^)]*\)/g, ' ');
       if (!isSummary(t) && !/\b[csi]\s*gst\b/i.test(t)) continue;
       if (/^\W*(?:grand\s*total|net\s*(?:amount|amt|payable|total|value)|total(?!\s*(?:tax|gst|cgst|sgst|igst|vat))|bill\s*amount|amount\s*payable|invoice\s*(?:total|amount|value))\b/i.test(t)) continue;
-      const re = /\b([csiu]\s*gst|gst|vat|tax\s*amount|total\s*tax)\b/ig;
+      const re = /\b(total\s*(?:gst|tax|vat)|(?:gst|tax)\s*(?:amt|amount|total)|[csiu]\s*gst|gst|vat)\b/ig;
       let m;
-      while ((m = re.exec(t))) { const v = firstMoneyAfter(t, m.index + m[0].length); if (v !== '' && v < 1e7) { tax += v; taxSeen = true } }
+      while ((m = re.exec(t))) {
+        const at = m.index + m[0].length, label = m[1].toLowerCase().replace(/\s+/g, ''), v = firstMoneyAfter(t, at);
+        if (v === '' || !(v < 1e7)) continue;
+        if (/^[csiu]gst$/.test(label)) { tx.splitFirst += v; tx.splitAll += sumAfter(t, at) }
+        else if (/^total|amt$|amount$/.test(label)) tx.total.push(v);
+        else tx.plain.push(v);
+      }
     }
+    tx.splitFirst = round2(tx.splitFirst); tx.splitAll = round2(tx.splitAll);
+    const pref = tx.total.length ? tx.total[tx.total.length - 1] : tx.plain.length ? tx.plain[tx.plain.length - 1] : tx.splitAll || tx.splitFirst || '';
     let disc = '';
     for (let i = from; i < lines.length; i++) { const t = lines[i].text.replace(/\([^)]*\)/g, ' '), m = t.match(/\b(?:less\s*:?\s*)?(?:discount|disc\s*amt|cash\s*discount)\b/i); if (m && isSummary(t) && !/\b(?:after|before|incl\.?|including|excl\.?|excluding|with|without|post|pre)\s*$/i.test(t.slice(0, m.index))) { const v = firstMoneyAfter(t, m.index + m[0].length); if (v !== '') disc = v } }
     let roff = 0;
-    for (let i = from; i < lines.length; i++) { const t = lines[i].text, m = t.match(/\bround(?:ed)?\s*(?:off|of)\b|\br\s*\/\s*o\b/i); if (m) { const v = firstMoneyAfter(t, m.index + m[0].length); if (v !== '' && Math.abs(v) < 1) roff = v } }
-    return { total, sub, tax: taxSeen ? round2(tax) : '', disc, roff };
+    for (let i = from; i < lines.length; i++) { const t = lines[i].text, m = t.match(/\bround(?:ed)?(?:\s*(?:off|of)\b|\s*:)|\br\s*\/\s*o\b/i); if (m) { const v = firstMoneyAfter(t, m.index + m[0].length); if (v !== '' && Math.abs(v) < 1) roff = v } }
+    return { total, sub, tax: pref === '' ? '' : round2(pref), taxRaw: tx, disc, roff };
   }
   function paymentMode(text) {
     const m = text.match(/\b(?:payment\s*(?:mode|terms|method|type)?|paid\s*(?:by|via|through|in)|mode\s*of\s*payment|pay\s*mode|mode)\s*[:\-]?\s*(cash|upi|card|credit\s*card|debit\s*card|credit|cheque|check|neft|rtgs|imps|bank\s*transfer|online|gpay|google\s*pay|phonepe|paytm|net\s*banking)\b/i);
-    return m ? m[1].replace(/\s+/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).replace('Upi', 'UPI').replace('Neft', 'NEFT').replace('Rtgs', 'RTGS').replace('Imps', 'IMPS') : '';
+    if (m) return m[1].replace(/\s+/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).replace('Upi', 'UPI').replace('Neft', 'NEFT').replace('Rtgs', 'RTGS').replace('Imps', 'IMPS');
+    // "PAID GPAY" written on the bill beats the printed sale type; a footer that only lists the apps ("Pay via GPay") does not
+    if (/\bpaid\b[^\n]{0,24}\b(?:g\s?pay|google\s*pay|phone\s?pe|paytm|bhim|upi)\b|\b(?:g\s?pay|google\s*pay|phone\s?pe|paytm|bhim|upi)\b[^\n]{0,24}\bpaid\b/i.test(text)) return 'UPI';
+    const ty = text.match(/\b(?:invoice\s*)?type\s*[:\-.]?\s*(credit|cash)\b/i) || text.match(/\b(cash|credit)\s*(?:bill|memo|invoice)\b/i);
+    return ty ? ty[1][0].toUpperCase() + ty[1].slice(1).toLowerCase() : '';
+  }
+
+  // sum of amount x GST% over the item rows, when every row has both
+  const gstOf = items => (items.length && items.every(i => +i.amount > 0 && +i.gst > 0)) ? round2(items.reduce((s, i) => s + i.amount * i.gst / 100, 0)) : '';
+  // the tax that agrees with the bill's own figures: sub-total - discount + tax + round-off = total
+  function resolveTax(tx, c) {
+    const cands = [...new Set([...tx.total, ...tx.plain, tx.splitAll, tx.splitFirst].filter(v => v > 0).map(round2))];
+    const pref = tx.total.length ? tx.total[tx.total.length - 1] : tx.plain.length ? tx.plain[tx.plain.length - 1] : tx.splitAll || tx.splitFirst || '';
+    const printed = { tax: pref === '' ? '' : round2(pref) };
+    const goal = [c.words, c.total].find(v => v !== '' && v != null && c.base > 0 && v >= c.base * 0.9 && v <= c.base * 1.5);
+    if (goal === undefined) return printed;
+    const need = round2(goal - c.base + (+c.disc || 0) - (+c.roff || 0));
+    if (need < 0 || need > c.base * 0.4) return printed;
+    const exact = cands.find(v => Math.abs(v - need) < 0.005);
+    if (exact !== undefined) return { tax: exact };
+    // CGST + SGST rounded half by half can be a paisa or two away from the bill's own GST total
+    const close = v => v > 0 && Math.abs(v - need) <= 0.021;
+    if ([tx.splitAll, tx.splitFirst].some(close) && ![...tx.total, ...tx.plain].some(close)) return { tax: need };
+    const hit = cands.find(v => Math.abs(v - need) <= 1.01);
+    if (hit !== undefined) return { tax: hit };
+    // a digit misread in the printed tax ("293.49" read as "295.49"): the sub-total and total are firm, so is the difference
+    if (need >= 0.5 && (c.gstSum !== '' && Math.abs(c.gstSum - need) <= Math.max(1.01, need * 0.01) || cands.some(v => Math.abs(v - need) <= Math.max(3, need * 0.03)))) return { tax: need, fixed: true };
+    return printed;
   }
 
   /* ---------- bill type ---------- */
@@ -919,12 +979,14 @@ const BillParser = (() => {
     const inWords = wordsAmount(text);
     reconcile(items, { ...t, words: inWords }, doc.source === 'sheet');
     const itemsSum = round2(items.reduce((s, i) => s + (+i.amount || 0), 0));
-    const calc = round2((t.sub || itemsSum) + (+t.tax || 0) - (+t.disc || 0) + (t.roff || 0));
-    d.total_amount = t.total; d.tax_amount = t.tax; d.discount_amount = t.disc;
-    if (d.tax_amount !== '' && (t.total !== '' ? d.tax_amount > t.total * 0.5 : itemsSum && d.tax_amount > itemsSum)) d.tax_amount = '';
+    d.total_amount = t.total; d.discount_amount = t.disc;
     if (d.total_amount !== '' && itemsSum > 0 && d.total_amount < itemsSum * 0.5) d.total_amount = '';
+    t.tax = resolveTax(t.taxRaw, { base: t.sub || itemsSum, total: d.total_amount, words: inWords, disc: t.disc, roff: t.roff, gstSum: gstOf(items) }).tax;
+    d.tax_amount = t.tax;
+    const calc = round2((t.sub || itemsSum) + (+t.tax || 0) - (+t.disc || 0) + (t.roff || 0));
     if (inWords !== '' && (d.total_amount === '' || Math.abs(inWords - d.total_amount) > 1 && (Math.abs(inWords - calc) <= 1.01 || !near(calc, d.total_amount, 0.015)))) d.total_amount = inWords;
     if (d.total_amount === '' && itemsSum > 0) { d.total_amount = calc; d.warnings.push('total_calculated') }
+    if (d.tax_amount !== '' && (d.total_amount !== '' ? d.tax_amount > d.total_amount * 0.5 : itemsSum && d.tax_amount > itemsSum)) d.tax_amount = '';
     if (d.total_amount !== '' && itemsSum > 0 && d.total_amount > itemsSum * 2.2) d.warnings.push('items_missing');
     const gst = text.match(/\b(\d{2}[A-Z]{5}\d{4}[A-Z][A-Z0-9]{3})\b/);
     const pid = text.match(/\b(?:uhid|mrn|patient\s*id|reg(?:istration)?\.?\s*no|ip\s*no|op\s*no)\.?\s*[:\-]?\s*([A-Z0-9][A-Z0-9\/\-]{2,})/i);
@@ -943,15 +1005,18 @@ const BillParser = (() => {
       if (noQty) d.warnings.push('no_qty:' + noQty);
     }
     if (itemsSum > 0 && d.total_amount !== '' && !d.warnings.includes('total_calculated')) {
-      const expect = [itemsSum, itemsSum + (+t.tax || 0), itemsSum - (+t.disc || 0), itemsSum + (+t.tax || 0) - (+t.disc || 0), t.sub || 0, (t.sub || 0) + (+t.tax || 0) - (+t.disc || 0)];
+      const rf = +t.roff || 0, tx0 = +t.tax || 0, ds = +t.disc || 0;
+      const expect = [itemsSum, itemsSum + tx0, itemsSum - ds, itemsSum + tx0 - ds, itemsSum + tx0 - ds + rf, t.sub || 0, (t.sub || 0) + tx0 - ds, (t.sub || 0) + tx0 - ds + rf];
       if (!expect.some(e => near(e, d.total_amount, 0.015) || Math.abs(e - d.total_amount) <= 1.01) && !(t.sub && Math.abs(t.sub - itemsSum) <= 1.01 && d.total_amount <= t.sub + 1)) d.warnings.push('sum_mismatch');
     }
     for (const it of items) { if (it._fixed) it.auto_fixed = true; delete it._dot; delete it._ok; delete it._fixed; delete it._derived }
     d.text = text;
+    // where the item table sits on the page: lets the reader look again at the part above or below it
+    d.layout = hdr ? { headY: lines[hdr.i].y0, footY: lines[endAt] ? lines[endAt].y0 : null, hasExp: kinds.has('exp') } : null;
     return d;
   }
 
-  return { lev, parse, findDates, parseMonthDate, money, packSize, classify, prepareDoc, isSummary, FORM, TYPE_KEYS };
+  return { wordsAmount, lev, parse, findDates, parseMonthDate, money, packSize, classify, prepareDoc, isSummary, FORM, TYPE_KEYS };
 })();
 if (typeof module !== 'undefined') module.exports = BillParser;
 
@@ -1385,7 +1450,7 @@ const BillCrop = (() => {
   return { FULL, detect, flatten, turned, turnQuad, order, valid, isFull, area };
 })();
 
-const APP_UPDATED='27 Oct 2026, build 2',CFG={HOSPITAL_NAME:"RxPx Hospitals",CURRENCY:"₹",EXPIRY_WARNING_DAYS:7,LOW_STOCK_LIMIT:10,OPEN_URL:""};
+const APP_UPDATED='29 Oct 2026',CFG={HOSPITAL_NAME:"RxPx Hospitals",CURRENCY:"₹",EXPIRY_WARNING_DAYS:7,LOW_STOCK_LIMIT:10,OPEN_URL:""};
 // the distinctive word of the hospital name, used to tell bills the hospital issued (sales) from bills it received (purchases)
 CFG.HOSPITAL_KEY=CFG.HOSPITAL_NAME.toLowerCase().replace(/[^a-z ]/g,' ').split(/\s+/).filter(w=>w.length>=3&&!/^(hospitals?|clinic|sri|shri|sree|the|and|medical|care|centre|center|multi|speciality|specialty|super|nursing|home|health|healthcare|institute|of)$/.test(w)).sort((a,b)=>b.length-a.length)[0]||'';
 const TYPES={
@@ -1402,6 +1467,8 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const inr=n=>{const v=+n||0;return CFG.CURRENCY+new Intl.NumberFormat('en-IN',{minimumFractionDigits:Number.isInteger(r2(v))?0:2,maximumFractionDigits:2}).format(v)};
 const okDate=d=>/^\d{4}-\d{2}-\d{2}$/.test(d||'')&&!Number.isNaN(new Date(d+'T00:00').valueOf());
 const fd=d=>okDate(d)?new Date(d+'T00:00').toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}):'Not set';
+const fmy=d=>okDate(d)?new Date(d+'T00:00').toLocaleDateString('en-GB',{month:'short',year:'numeric'}):'';
+const monthName=ym=>{const[y,m]=String(ym).split('-');return new Date(+y,+m-1,1).toLocaleDateString('en-GB',{month:'long',year:'numeric'})};
 const uid=()=>crypto.randomUUID?crypto.randomUUID():String(Date.now())+Math.random().toString(16).slice(2);
 const STORE_KEY='hospital-bills-preview-v1',SESSION_KEY='rxpx-session-v1',FLOW_KEY='rxpx-flow-v1',ACCOUNTS_KEY='rxpx-accounts-v1';
 const accounts=()=>{try{return JSON.parse(localStorage.getItem(ACCOUNTS_KEY)||'{}')||{}}catch{return{}}};
@@ -1463,8 +1530,14 @@ ${S.msg?`<p class="err">${esc(S.msg)}</p>`:''}
 
 const WARN_TEXT={no_date:'Bill date was not found on the bill.',no_number:'Bill number was not found on the bill.',total_calculated:'Total was not found, so it was added up from the items.',sum_mismatch:'The items do not add up exactly to the bill total.',items_missing:'Some items on the bill may not have been read.',total_mismatch:'The total looks unusual.',no_expiry:'{n} medicine(s) have no expiry date.',no_qty:'{n} item(s) have no quantity.'};
 const warnText=w=>{const[k,n]=String(w).split(':');return(WARN_TEXT[k]||'').replace('{n}',n||'')};
-function lastCard(){const L=S.lastUpload;if(!L)return'';const b=S.bills.find(x=>x.id==L.id);if(!b||Date.now()-new Date(b.at).getTime()>864e5)return'';const n=(b.warnings||[]).length;
-return `<section class="saved${n?' chk':''}"><button class="sv-main" data-a="open" data-id="${b.id}"><span class="ib">${ic(n?'triangle-alert':'circle-check-big')}</span><span class="sv-t"><b>${n?'Please check this bill':'Bill saved'}</b><span class="mu sm">${esc(L.impact)}</span>${L.shortage?`<span class="sm err" style="margin:2px 0 0">${esc(L.shortage)}</span>`:''}</span>${ic('chevron-right','sv-go')}</button><button class="x" data-a="dismiss" aria-label="Hide this note">${ic('x')}</button></section>`}
+const reasonsOf=ws=>{const ks=(ws||[]).map(w=>String(w).split(':')),miss=[ks.some(k=>k[0]=='no_date')&&'date',ks.some(k=>k[0]=='no_number')&&'bill number'].filter(Boolean),out=[];
+if(miss.length)out.push(`${miss.join(' and ')} not found`);
+for(const[k,n]of ks){const p=+n==1?'':'s';if(k=='total_calculated')out.push('total added up from the items');else if(k=='sum_mismatch')out.push('items do not add up to the total');else if(k=='items_missing')out.push('some items may be missing');else if(k=='no_expiry')out.push(`${n} medicine${p} without an expiry date`);else if(k=='no_qty')out.push(`${n} item${p} without a quantity`);else if(k=='total_mismatch')out.push('total looks unusual')}
+const s=out.slice(0,3).join(' · ');return s?s[0].toUpperCase()+s.slice(1)+(out.length>3?` · and ${out.length-3} more`:''):''};
+// a batch on a purchase bill that was already past its expiry date when the bill was added
+const expiredOf=b=>{if(b.type!='medicine_purchase')return'';const x=(b.items||[]).filter(i=>i.description&&okDate(i.expiry_date)&&st({expiry:i.expiry_date})=='exp');if(!x.length)return'';return x.length==1?`${x[0].description} is past its expiry date (${fmy(x[0].expiry_date)}).`:`${x.length} medicines on this bill are past their expiry date.`};
+function lastCard(){const L=S.lastUpload;if(!L)return'';const b=S.bills.find(x=>x.id==L.id);if(!b||Date.now()-new Date(b.at).getTime()>864e5)return'';const n=(b.warnings||[]).length,why=reasonsOf(b.warnings);
+return `<section class="saved${n?' chk':''}"><button class="sv-main" data-a="open" data-id="${b.id}"><span class="ib">${ic(n?'triangle-alert':'circle-check-big')}</span><span class="sv-t"><b>${n?'Please check this bill':'Bill saved'}</b>${why?`<span class="sm why">${esc(why)}</span>`:''}<span class="mu sm">${esc(L.impact)}</span>${L.shortage?`<span class="sm err" style="margin:2px 0 0">${esc(L.shortage)}</span>`:''}${L.expired?`<span class="sm err" style="margin:2px 0 0">${esc(L.expired)}</span>`:''}</span>${ic('chevron-right','sv-go')}</button><button class="x" data-a="dismiss" aria-label="Hide this note">${ic('x')}</button></section>`}
 
 function copiesCard(){const n=dupGroups().reduce((c,g)=>c+g.extras.length,0);if(!n)return'';
 return `<section class="saved chk"><button class="sv-main" data-a="copies"><span class="ib">${ic('copy')}</span><span class="sv-t"><b>${n} ${n==1?'bill looks':'bills look'} like a copy</b><span class="mu sm">Tap to remove ${n==1?'it':'them'}.</span></span>${ic('chevron-right','sv-go')}</button></section>`}
@@ -1568,13 +1641,17 @@ function setStep(n){S.step=n;const box=$('#psteps');if(!box)return;box.querySele
 
 function kind(){const d=S.draft;return `<div class="flow"><h1>What kind of bill is this?</h1><p class="mu">The bill was read (${d.items.length} ${d.items.length==1?'item':'items'}, total ${inr(billAmount(d))}), but its type is not clear. Choose one so the right numbers are updated.</p>${TKEYS.map(k=>`<button class="card opt ${S.type==k?'on':''}" data-a="pickType" data-t="${k}"><span class="ib">${ic(TYPES[k].i)}</span><span><b>${TYPES[k].q}</b><span class="mu sm" style="display:block">${TYPES[k].money=='expense'?'Adds to expenses':'Adds to revenue'}${TYPES[k].med?(k=='medicine_purchase'?', adds stock':', reduces stock'):''}</span></span></button>`).join('')}<div class="bar"><div class="g2"><button class="btn" data-a="cancelKind">Cancel</button><button class="btn pri" data-a="saveKind" ${TYPES[S.type]?'':'disabled'}>Save bill</button></div></div></div>`}
 
+const itemCard=b=>i=>{const med=TYPES[b.type]?.med,q=+i.quantity||0,gone=okDate(i.expiry_date)&&st({expiry:i.expiry_date})=='exp',
+a=[`${q} ${med?(q==1?'pack':'packs'):'qty'}${+i.free?' + '+i.free+' free':''}`,i.batch_no&&`batch ${i.batch_no}`,i.manufacture_date&&`Mfg ${fmy(i.manufacture_date)}`,i.expiry_date&&`Exp ${fmy(i.expiry_date)}`].filter(Boolean).join(' · '),
+c=[i.pack&&`Pack ${i.pack}`,+i.mrp>0&&`MRP ${inr(i.mrp)}`,+i.rate>0&&`Rate ${inr(i.rate)}`,+i.gst>0&&`GST ${i.gst}%`,+i.disc>0&&`Disc ${i.disc}%`].filter(Boolean).join(' · ');
+return `<div class="card sp"><div><b>${esc(i.description||'Item')}</b><div class="mu sm">${esc(a)}${gone?' <span class="b exp">Expired</span>':''}</div>${c?`<div class="mu sm">${esc(c)}</div>`:''}</div><b class="num">${inr(+i.amount)}</b></div>`};
 function detail(){const b=S.bills.find(x=>x.id==S.detail);if(!b)return home();const T=TYPES[b.type]||{t:'Unclassified bill',ref:'Reference'},f=b.file,url=S.img[b.id];const ws=(b.warnings||[]).map(warnText).filter(Boolean);
 return `<div class="flow stack"><button class="lnk" data-a="go" data-v="home">${ic('chevron-left')}Back</button><div><div class="mu sm">${esc(T.t)}</div><h1>${esc(b.party||'No name')}</h1></div>
 ${!TYPES[b.type]?`<div class="warn">${ic('triangle-alert')}<div>This bill has no type yet, so it does not change stock or totals. Tap <b>Edit details</b> and choose its type.</div></div>`:''}
 ${ws.length?`<div class="warn">${ic('triangle-alert')}<div><b>Please check against the paper bill:</b> ${ws.map(esc).join(' ')}</div></div>`:''}
 <div class="card" id="origbox">${f?(url?(f.kind=='image'||/^image\//.test(f.type)?`<img class="prev" src="${url}" alt="Original bill">`:`<a class="lnk" href="${url}" target="_blank" rel="noopener" download="${esc(f.name)}">${ic('file-text')}Open original file</a>`):`<div class="sp" style="justify-content:flex-start">${ic('file-text')}<b>${esc(f.name)}</b></div>`):`<span class="mu">No file was attached to this bill.</span>`}</div>
 <dl class="card dl"><dt>Bill type</dt><dd>${esc(T.t)}</dd><dt>Bill number</dt><dd>${esc(b.bill_number||'Not set')}</dd><dt>Date</dt><dd>${fd(b.bill_date)}</dd><dt>${T.ref}</dt><dd>${esc(b.ref||'Not set')}</dd><dt>Payment</dt><dd>${esc(b.mode||'Not set')}</dd><dt>Tax</dt><dd class="num">${inr(b.tax)}</dd><dt>Discount</dt><dd class="num">${inr(b.disc)}</dd><dt><b>Total</b></dt><dd class="num"><b>${inr(b.total)}</b></dd></dl>
-${b.items.length?`<b>Items (${b.items.length})</b>${b.items.map(i=>`<div class="card sp"><div><b>${esc(i.description||'Item')}</b><div class="mu sm">${esc(String(+i.quantity||0))} ${TYPES[b.type]?.med?'units':'qty'}${+i.free?' + '+esc(i.free)+' free':''}${i.batch_no?', batch '+esc(i.batch_no):''}${i.manufacture_date?' | Mfg '+fd(i.manufacture_date):''}${i.expiry_date?' | Exp '+fd(i.expiry_date):''}</div></div><b class="num">${inr(+i.amount)}</b></div>`).join('')}`:''}
+${b.items.length?`<b>Items (${b.items.length})</b>${b.items.map(itemCard(b)).join('')}`:''}
 ${b.stock_movements?.length?`<p class="mu sm">Stock ${b.stock_movements[0].direction=='in'?'added':'reduced'} for ${b.stock_movements.length} ${b.stock_movements.length==1?'medicine':'medicines'}.</p>`:''}
 <p class="mu sm">Uploaded by ${esc(b.by)} on ${new Date(b.at).toLocaleString('en-IN',{day:'2-digit',month:'short',year:'numeric',hour:'numeric',minute:'2-digit'})}${b.edited_at?` · corrected by ${esc(b.edited_by||'')}`:''}</p>
 <button class="btn pri" data-a="edit">${ic('pencil')}Edit details</button>
@@ -1658,9 +1735,28 @@ const weak=b=>b.r.conf<60||!b.d.items.length||b.d.total_amount===''||b.d.warning
 if(framed&&!f.touched&&weak(best)){const whole=await framedPhoto({...f,quad:BillCrop.FULL()});if(S.run!=id)throw new Error('cancelled');const other=await readPhoto(whole,id,{framed:false});if(other.score>best.score){flat.width=flat.height=0;best=other;flat=whole}else whole.width=whole.height=0}
 return{best,flat}}
 // read a framed photo; other quarter turns are tried only when the text does not read
+// a strip of the cleaned-up page, read on its own. A whole page with dark table edges, holes or glare can read the top of
+// a bill badly while the same strip alone reads fine: this is what finds a bill number or date the page read missed.
+async function readBand(canvas,top,bottom,label){top=Math.max(0,Math.round(top));bottom=Math.min(canvas.height,Math.round(bottom));if(bottom-top<40)return null;
+const c=document.createElement('canvas');c.width=canvas.width;c.height=bottom-top;const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.drawImage(canvas,0,top,c.width,c.height,0,0,c.width,c.height);
+try{const r=await ocrCanvas(c,label);return{top,bottom,lines:r.lines.map(l=>({toks:l.toks.map(t=>({...t,y0:t.y0+top,y1:t.y1+top}))}))}}finally{c.width=c.height=0}}
+const readScore=(d,conf)=>{const real=d.total_amount!==''&&!d.warnings.includes('total_calculated'),fits=real&&d.items.length&&!d.warnings.includes('sum_mismatch')&&!d.warnings.includes('items_missing');return Math.min(d.items.length,15)*2+(real?4:0)+(fits?5:0)+(d.bill_date?2:0)+(d.bill_number?2:0)+conf/5-d.warnings.length};
+// when the bill number, date, totals or some item details are missing, the strip of the page that holds them is read again
+// and stitched into the first reading. It is kept only when that reads better.
+async function closerLook(canvas,r,d,id){if(r.conf<45||!d.items.length||!d.layout)return{r,d};
+const w=d.warnings,L=d.layout,H=canvas.height,top=!d.bill_number||!d.bill_date,foot=w.includes('total_calculated')||w.includes('sum_mismatch')||w.includes('items_missing'),tab=w.some(x=>x.startsWith('no_qty'))||(L.hasExp&&w.some(x=>x.startsWith('no_expiry')));
+if(!top&&!foot&&!tab)return{r,d};
+const bands=[];if(top)bands.push([0,L.headY-4,'Looking closer at the top of the bill...']);if(tab)bands.push([L.headY-4,(L.footY??H*.7)+4,'Looking closer at the items...']);if(foot)bands.push([(L.footY??H*.6)-4,H,'Looking closer at the totals...']);
+const got=[];for(const[a,b,label]of bands){if(S.run!=id)throw new Error('cancelled');const x=await readBand(canvas,a,b,label);if(x)got.push(x)}
+if(!got.length)return{r,d};
+const mid=l=>l.toks.reduce((s,k)=>s+(k.y0+k.y1)/2,0)/l.toks.length,inBand=l=>got.some(g=>mid(l)>=g.top&&mid(l)<g.bottom);
+const lines=[...r.lines.filter(l=>l.toks.length&&!inBand(l)),...got.flatMap(g=>g.lines.filter(l=>l.toks.length))].sort((a,b)=>mid(a)-mid(b)),d2=BillParser.parse({source:'ocr',lines},parseCtx());
+return readScore(d2,r.conf)>readScore(d,r.conf)?{r:{...r,lines},d:d2}:{r,d}}
 async function readPhoto(src,id,opts={}){setReadProgress('Cleaning up the photo...',1);await new Promise(r=>setTimeout(r,30));
 const th=BillImage.textSize(src);let best=null;const side=!opts.manual&&BillImage.sideways(src),order=opts.manual?[0,2,1,3]:side?[1,3,0,2]:[0,1,3,2];
-for(const extra of order){if(S.run!=id)throw new Error('cancelled');const canvas=BillImage.prepare(src,extra,{textH:th,noMask:!!opts.framed});const r=await ocrCanvas(canvas,extra?'Turning the photo and reading again...':'Reading your bill...');canvas.width=canvas.height=0;const d=BillParser.parse({source:'ocr',lines:r.lines},parseCtx());const realTotal=d.total_amount!==''&&!d.warnings.includes('total_calculated');const fits=realTotal&&d.items.length&&!d.warnings.includes('sum_mismatch')&&!d.warnings.includes('items_missing');const score=Math.min(d.items.length,15)*2+(realTotal?4:0)+(fits?5:0)+(d.bill_date?2:0)+(d.bill_number?2:0)+r.conf/5;if(!best||score>best.score)best={score,r,d,rot:extra};
+for(const extra of order){if(S.run!=id)throw new Error('cancelled');const canvas=BillImage.prepare(src,extra,{textH:th,noMask:!!opts.framed});let r=await ocrCanvas(canvas,extra?'Turning the photo and reading again...':'Reading your bill...'),d=BillParser.parse({source:'ocr',lines:r.lines},parseCtx());
+try{({r,d}=await closerLook(canvas,r,d,id))}finally{canvas.width=canvas.height=0}
+const realTotal=d.total_amount!==''&&!d.warnings.includes('total_calculated');const score=readScore(d,r.conf);if(!best||score>best.score)best={score,r,d,rot:extra};
 if(d.items.length&&realTotal&&(d.bill_date||d.bill_number)||r.conf>=70&&(d.bill_date||d.bill_number||d.items.length)||opts.manual&&r.conf>=50&&(d.items.length||realTotal))break}
 return best}
 function groupLines(toks){toks.sort((a,b)=>a.y0-b.y0||a.x0-b.x0);const lines=[];for(const t of toks){const h=Math.max(1,t.y1-t.y0),cy=(t.y0+t.y1)/2,l=lines.find(l=>Math.abs(l.cy-cy)<=Math.max(h,l.h)*0.5);if(l){l.toks.push(t)}else lines.push({cy,h,toks:[t]})}lines.sort((a,b)=>a.cy-b.cy);return lines.map(l=>({toks:l.toks.sort((a,b)=>a.x0-b.x0)}))}
@@ -1747,12 +1843,14 @@ if(m.direction=='in'){if(!lot||!loose&&(+lot.qty||0)<m.quantity-0.0005)return`Ca
 else if(m.direction=='out'){if(lot)lot.qty=r3((+lot.qty||0)+m.quantity);else S.meds.push({id:uid(),name:m.name,key:medKey(m.name),batch:m.batch||'',qty:m.quantity,pack_n:'',mrp:'',manufacture_date:m.manufacture_date||'',expiry:m.expiry||'',supplier:b.party})}}return''}
 async function saveTyped(e,items,total){const d={bill_number:String(e.bill_number||'').trim(),bill_date:okDate(e.bill_date)?e.bill_date:'',total_amount:total,items,warnings:[]},party=String(e.party).trim(),dup=findDuplicate(d,S.file?.hash||'',party);if(dup)return S.msg=`This bill is already saved${dup.bill_number?' (bill no. '+dup.bill_number+')':''}.`,render();
 const b={id:uid(),type:e.type,bill_number:d.bill_number,bill_date:d.bill_date,party,ref:'',mode:String(e.mode||'').trim(),total:r2(total),tax:+parseNumber(e.tax)||0,disc:+parseNumber(e.disc)||0,items,file:S.file?{name:S.file.name,type:S.file.type,kind:S.file.kind,hash:S.file.hash||'',rot:S.file.rot||0,url:'',stored:false}:null,by:S.user.name,at:new Date().toISOString(),warnings:[],read:{source:'typed'}};
-const oldBills=S.bills.slice(),oldMeds=S.meds.map(m=>({...m})),oldImpact=S.lastUpload,mv=stock(b);b.stock_movements=mv.movements;S.bills.unshift(b);S.lastUpload={id:b.id,bill_number:b.bill_number,type:b.type,impact:impactOf(b,mv),shortage:shortageOf(b,mv),warnings:[]};
+const oldBills=S.bills.slice(),oldMeds=S.meds.map(m=>({...m})),oldImpact=S.lastUpload,mv=stock(b);b.stock_movements=mv.movements;S.bills.unshift(b);S.lastUpload={id:b.id,bill_number:b.bill_number,type:b.type,impact:impactOf(b,mv),shortage:shortageOf(b,mv),expired:expiredOf(b),warnings:[]};
 S.busy=1;const ok=await persist();S.busy=0;if(!ok){S.bills=oldBills;S.meds=oldMeds;S.lastUpload=oldImpact;S.msg='Could not save this bill in browser storage. Free some space and try again.';return render()}
 const src=S.file?.source,flat=S.file?.flat;if(S.file?.url)URL.revokeObjectURL(S.file.url);keepOriginal(b,src,flat);editorRelease();S.file=null;S.edit=null;S.draft=null;S.partyName='';S.flow='choose';go('home');toast(`Bill saved: ${inr(b.total)} ${TYPES[b.type].money}`)}
 const restoreBill=(b,old,file)=>{for(const k of Object.keys(b))if(!(k in old))delete b[k];Object.assign(b,old,{file})};
 const cleanItem=i=>{const n=v=>{const x=parseNumber(v);return x===''?'':x};return{description:String(i.description||'').trim(),batch_no:normBatch(i.batch_no),manufacture_date:okDate(i.manufacture_date)?i.manufacture_date:'',expiry_date:okDate(i.expiry_date)?i.expiry_date:'',quantity:n(i.quantity),free:n(i.free),pack:i.pack||'',pack_n:+i.pack_n||'',mrp:n(i.mrp),rate:n(i.rate),disc:n(i.disc),gst:n(i.gst),amount:n(i.amount)}};
-function impactOf(b,mv){const T=TYPES[b.type],parts=[`${T?(T.money=='expense'?'Added to expenses':'Added to revenue'):'Saved (no type)'}: ${inr(b.total)}`];if(mv.added)parts.push(`Stock added: ${+mv.added.toFixed(2)} units of ${new Set(mv.movements.map(m=>m.lot)).size} medicines`);if(mv.removed)parts.push(`Stock reduced: ${+mv.removed.toFixed(2)} packs`);return parts.join(' · ')}
+function impactOf(b,mv){const T=TYPES[b.type],bm=billMonth(b),late=bm&&bm!=thisMonth()?` (${monthName(bm)})`:'',parts=[`${T?(T.money=='expense'?'Added to expenses':'Added to revenue'):'Saved (no type)'}${late}: ${inr(b.total)}`];
+if(mv.added){const names=[...new Set(mv.movements.filter(m=>m.direction=='in').map(m=>m.name))],q=+mv.added.toFixed(2);parts.push(`Stock added: ${q} ${q==1?'pack':'packs'} of ${names.length==1?names[0]:names.length+' medicines'}`)}
+if(mv.removed){const q=+mv.removed.toFixed(2);parts.push(`Stock reduced: ${q} ${q==1?'pack':'packs'}`)}return parts.join(' · ')}
 function shortageOf(b,mv){return mv.shortage.length?mv.shortage.map(x=>`${x.name}: ${+x.quantity.toFixed(2)} was not in stock`).join('; '):TYPES[b.type]?.med&&!mv.added&&!mv.removed?'No medicine quantities were found, so stock was not changed.':''}
 async function keepOriginal(b,src,flat){try{if(!src||!b.file)return;let blob=null;if(b.file.kind=='image'){if(flat?.canvas)blob=await BillImage.thumbnail(flat.canvas,flat.rot||0,2000);else{const{img,done}=await loadImageEl(src);try{blob=await BillImage.thumbnail(img,b.file.rot||0)}finally{done()}}}else if(src.size<=8*1024*1024)blob=src;if(!blob)return;await IDB.put(b.id,blob);if(!S.bills.some(x=>x.id==b.id)){IDB.del(b.id).catch(()=>{});return}b.file.stored=true;persist();if(S.view=='detail'&&S.detail==b.id)loadOriginal()}catch{}}
 async function loadOriginal(){const b=S.bills.find(x=>x.id==S.detail);if(!b?.file?.stored||S.img[b.id])return;try{const blob=await IDB.get(b.id);if(!blob)return;for(const k in S.img){URL.revokeObjectURL(S.img[k]);delete S.img[k]}S.img[b.id]=URL.createObjectURL(blob);if(S.view=='detail'&&S.detail==b.id)render()}catch{}}
@@ -1785,7 +1883,7 @@ const hasAmount=parseNumber(d.total_amount)!==''||d.items.some(i=>parseNumber(i.
 if(!hasAmount||!Number.isFinite(total)||total<=0){S.run=0;S.bad=1;S.view='proc';S.ocrMessage='The bill amount could not be read. This bill was not saved. Take a clearer photo or edit the file and try again.';return render()}
 const b={id:uid(),type:T?S.type:'general',bill_number:String(d.bill_number||'').trim(),bill_date:okDate(d.bill_date)?d.bill_date:'',party,ref:String(d.party_ref||'').trim(),mode:String(d.payment_mode||'').trim(),total:r2(total),tax:+d.tax_amount||0,disc:+d.discount_amount||0,items:d.items.map(cleanItem).filter(i=>i.description),file:S.file?{name:S.file.name,type:S.file.type,kind:S.file.kind,hash:S.file.hash||'',rot:S.file.rot||0,source:S.file.source,url:S.file.url||'',stored:false}:null,by:S.user.name,at:new Date().toISOString(),warnings:d.warnings||[],read:d.read||{}};
 const oldBills=S.bills.slice(),oldMeds=S.meds.map(m=>({...m})),oldImpact=S.lastUpload,mv=stock(b);b.stock_movements=mv.movements;
-S.bills.unshift(b);S.lastUpload={id:b.id,bill_number:b.bill_number,type:b.type,impact:impactOf(b,mv),shortage:shortageOf(b,mv),warnings:b.warnings};
+S.bills.unshift(b);S.lastUpload={id:b.id,bill_number:b.bill_number,type:b.type,impact:impactOf(b,mv),shortage:shortageOf(b,mv),expired:expiredOf(b),warnings:b.warnings};
 S.busy=1;const ok=await persist();S.busy=0;if(!ok){S.bills=oldBills;S.meds=oldMeds;S.lastUpload=oldImpact;S.run=0;S.bad=1;S.view='proc';S.step=3;S.ocrMessage='Could not save this bill in browser storage. Free some space and try again.';return render()}
 const src=b.file?.source,flat=S.file?.flat;if(b.file){delete b.file.source;if(b.file.url)URL.revokeObjectURL(b.file.url);b.file.url=''}keepOriginal(b,src,flat);editorRelease();
 S.file=null;S.draft=null;S.partyName='';S.flow='choose';go('home');toast(`Bill saved: ${inr(b.total)} ${T?.money=='revenue'?'revenue':'expense'}`)},
@@ -1804,7 +1902,7 @@ const oldMeds=S.meds.map(m=>({...m})),oldBill=JSON.parse(JSON.stringify({...b,fi
 Object.assign(b,{type:e.type,party:String(e.party).trim(),bill_number:String(e.bill_number||'').trim(),bill_date:okDate(e.bill_date)?e.bill_date:'',total:r2(total),tax:+parseNumber(e.tax)||0,disc:+parseNumber(e.disc)||0,mode:String(e.mode||'').trim(),items,warnings:[],edited_at:new Date().toISOString(),edited_by:S.user.name});
 const mv=legacy?{added:0,removed:0,shortage:[],movements:[]}:stock(b);
 const neg=S.meds.find(m=>(+m.qty||0)<-0.0005&&(+m.qty||0)<(+(oldMeds.find(o=>o.id===m.id)||{}).qty||0)-0.0005);if(neg){S.meds=oldMeds;restoreBill(b,oldBill,file);S.msg=`Cannot reduce ${neg.name}${neg.batch?' (batch '+neg.batch+')':''}: some of that stock has already been sold.`;return render()}
-if(!legacy)b.stock_movements=mv.movements;if(S.lastUpload?.id==b.id)S.lastUpload={...S.lastUpload,type:b.type,impact:impactOf(b,mv),shortage:shortageOf(b,mv),warnings:[]};
+if(!legacy)b.stock_movements=mv.movements;if(S.lastUpload?.id==b.id)S.lastUpload={...S.lastUpload,type:b.type,impact:impactOf(b,mv),shortage:shortageOf(b,mv),expired:expiredOf(b),warnings:[]};
 S.busy=1;const ok=await persist();S.busy=0;if(!ok){S.meds=oldMeds;restoreBill(b,oldBill,file);S.msg='Could not save the changes. Free space and try again.';return render()}
 S.edit=null;S.detail=b.id;go('detail');toast(legacy?'Bill corrected. Stock was not changed because this older bill has no stock history':'Bill corrected. Stock and totals updated')},
 mf(d){S.mf=d.f;render()},medgo(d){S.mf=d.f;go('meds')},dismiss(){S.lastUpload=null;persist();render()},
