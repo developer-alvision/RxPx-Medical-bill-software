@@ -1,5 +1,7 @@
 # Deploy RxPx Hospital Bills
 
+The current `medical bills.html` is the browser-only page: it keeps its data in the browser, `npm run build:production` builds it without Supabase settings, and `dist/` then contains only the page. The Supabase steps below apply to the Supabase version of the page, which loads `app-config.js`.
+
 The frontend is a static website. Supabase supplies authentication, the database, and the optional AI Edge Function. `serve.py` is a local development server, not the production server.
 
 ## Current setup

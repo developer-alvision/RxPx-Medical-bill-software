@@ -8,9 +8,14 @@ const { build, readConfig, PUBLIC_FILES } = require('../scripts/build-static.cjs
 const workspace = path.resolve(__dirname, '..');
 const publicSettings = { RXPX_SUPABASE_URL: 'https://example.supabase.co', RXPX_SUPABASE_ANON_KEY: 'sb_publishable_test_public_key_only' };
 
-function fixture(t) {
+// A page that loads the Supabase scripts (app-config.js and friends), for the connection-settings checks.
+const SUPABASE_PAGE = '<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><title>RxPx Bills</title></head><body><div id="app"></div>\n'
+  + '<script src="app-config.js"></script><script src="bill-extraction.js"></script><script src="bill-export.js"></script><script src="medical-bills.js"></script>\n</body></html>\n';
+
+function fixture(t, page) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'rxpx-static-test-'));
   for (const file of ['medical bills.html', ...PUBLIC_FILES]) fs.copyFileSync(path.join(workspace, file), path.join(root, file));
+  if (page) fs.writeFileSync(path.join(root, 'medical bills.html'), page);
   t.after(() => {
     assert.equal(path.dirname(root), path.resolve(os.tmpdir()));
     assert.ok(path.basename(root).startsWith('rxpx-static-test-'));
@@ -20,7 +25,7 @@ function fixture(t) {
 }
 
 test('static output has a working index, every local script and only public application files', t => {
-  const root = fixture(t);
+  const root = fixture(t, SUPABASE_PAGE);
   fs.writeFileSync(path.join(root, 'private-record.txt'), 'Never publish private workspace contents');
   fs.mkdirSync(path.join(root, 'dist'));
   fs.writeFileSync(path.join(root, 'dist', 'stale-private.txt'), 'Never keep stale output');
@@ -39,7 +44,7 @@ test('static output has a working index, every local script and only public appl
 });
 
 test('preview supports setup but production preflight blocks empty or partial connection settings', t => {
-  const root = fixture(t);
+  const root = fixture(t, SUPABASE_PAGE);
   assert.equal(build({ root, env: {}, checkOnly: true }).configured, false);
   assert.throws(() => build({ root, env: {}, requireConfig: true, checkOnly: true }), /Supabase connection is missing/);
   assert.throws(() => readConfig(root, { RXPX_SUPABASE_URL: publicSettings.RXPX_SUPABASE_URL }), /Supabase connection is missing/);
@@ -47,7 +52,7 @@ test('preview supports setup but production preflight blocks empty or partial co
 });
 
 test('production emits public configuration, accepts anon JWTs and never emits server environment secrets', t => {
-  const root = fixture(t);
+  const root = fixture(t, SUPABASE_PAGE);
   const serverSecret = 'server-only-value-never-put-in-browser';
   const env = { ...publicSettings, RXPX_AI_EXTRACTION: 'true', OPENAI_API_KEY: serverSecret, SUPABASE_SERVICE_ROLE_KEY: serverSecret };
   build({ root, env, requireConfig: true });
@@ -79,6 +84,23 @@ test('a junction or symlink at dist cannot redirect the build into another direc
   assert.throws(() => build({ root, env: publicSettings }), /real dist directory/);
   assert.equal(fs.readFileSync(path.join(elsewhere, 'keep.txt'), 'utf8'), 'Preserve outside data');
   fs.unlinkSync(output);
+});
+
+test('the browser-only page builds for production without connection settings and ships only the page', t => {
+  const root = fixture(t);
+  const result = build({ root, env: {}, requireConfig: true });
+  assert.equal(result.usesSupabase, false);
+  assert.deepEqual(fs.readdirSync(path.join(root, 'dist')).sort(), ['_headers', 'index.html', 'medical bills.html']);
+  assert.equal(fs.readFileSync(path.join(root, 'dist', 'index.html'), 'utf8'), fs.readFileSync(path.join(root, 'medical bills.html'), 'utf8'));
+});
+
+test('a page with two pasted documents or a broken inline script is rejected', t => {
+  const root = fixture(t);
+  const page = fs.readFileSync(path.join(root, 'medical bills.html'), 'utf8');
+  fs.writeFileSync(path.join(root, 'medical bills.html'), page + '\n' + page);
+  assert.throws(() => build({ root, env: {}, checkOnly: true }), /more than one HTML document/);
+  fs.writeFileSync(path.join(root, 'medical bills.html'), page.replace('</script></body>', 'const = ;</script></body>'));
+  assert.throws(() => build({ root, env: {}, checkOnly: true }), /syntax error/);
 });
 
 test('host configurations use the static output and authenticated AI function entrypoint', () => {
